@@ -99,9 +99,12 @@ let BookingsService = BookingsService_1 = class BookingsService {
         }
         const priceBreakdown = this.computePrice(property, nights);
         const rawHostRef = property.ownerId ?? property.agentId;
-        const hostId = rawHostRef?._id
+        const hostIdStr = rawHostRef?._id
             ? rawHostRef._id.toString()
             : rawHostRef?.toString();
+        const validHostObjectId = hostIdStr && mongoose_2.Types.ObjectId.isValid(hostIdStr)
+            ? new mongoose_2.Types.ObjectId(hostIdStr)
+            : undefined;
         const isInstantBook = !!property.isInstantBookable;
         const initialStatus = booking_schema_1.BookingStatus.PENDING;
         const confirmedAt = undefined;
@@ -112,7 +115,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
             propertyId: new mongoose_2.Types.ObjectId(dto.propertyId),
             ...(dto.roomId ? { roomId: new mongoose_2.Types.ObjectId(dto.roomId) } : {}),
             guestId: guest._id,
-            hostId: new mongoose_2.Types.ObjectId(hostId),
+            ...(validHostObjectId ? { hostId: validHostObjectId } : {}),
             checkIn,
             checkOut,
             nights,
@@ -133,35 +136,41 @@ let BookingsService = BookingsService_1 = class BookingsService {
         const fmt = (d) => d.toISOString().split('T')[0];
         const propertyTitle = property.title ?? 'your property';
         const guestIdStr = guest._id.toString();
-        if (isInstantBook) {
-            await this.notificationsService.notifyBookingConfirmed(guestIdStr, {
-                bookingId: saved._id.toString(),
-                propertyId: dto.propertyId,
-                propertyTitle,
-                hostName: property.ownerId?.name ?? 'Host',
-                checkIn: fmt(checkIn),
-                checkOut: fmt(checkOut),
-            });
-            await this.notificationsService.notifyBookingRequest(hostId, {
-                guestId: guestIdStr,
-                bookingId: saved._id.toString(),
-                propertyId: dto.propertyId,
-                propertyTitle,
-                guestName: guest.name,
-                checkIn: fmt(checkIn),
-                checkOut: fmt(checkOut),
-            });
+        const bookingIdStr = saved._id.toString();
+        try {
+            if (isInstantBook) {
+                await this.notificationsService.notifyBookingConfirmed(guestIdStr, {
+                    bookingId: bookingIdStr,
+                    propertyId: dto.propertyId,
+                    propertyTitle,
+                    hostName: property.ownerId?.name ?? 'Host',
+                    checkIn: fmt(checkIn),
+                    checkOut: fmt(checkOut),
+                });
+                await this.notificationsService.notifyBookingRequest(hostIdStr ?? '', {
+                    guestId: guestIdStr,
+                    bookingId: bookingIdStr,
+                    propertyId: dto.propertyId,
+                    propertyTitle,
+                    guestName: guest.name,
+                    checkIn: fmt(checkIn),
+                    checkOut: fmt(checkOut),
+                });
+            }
+            else {
+                await this.notificationsService.notifyBookingRequest(hostIdStr ?? '', {
+                    guestId: guestIdStr,
+                    bookingId: bookingIdStr,
+                    propertyId: dto.propertyId,
+                    propertyTitle,
+                    guestName: guest.name,
+                    checkIn: fmt(checkIn),
+                    checkOut: fmt(checkOut),
+                });
+            }
         }
-        else {
-            await this.notificationsService.notifyBookingRequest(hostId, {
-                guestId: guestIdStr,
-                bookingId: saved._id.toString(),
-                propertyId: dto.propertyId,
-                propertyTitle,
-                guestName: guest.name,
-                checkIn: fmt(checkIn),
-                checkOut: fmt(checkOut),
-            });
+        catch (notifErr) {
+            this.logger.warn(`createBooking: notification delivery failed for booking ${bookingIdStr}: ${notifErr?.message}`);
         }
         return saved;
     }

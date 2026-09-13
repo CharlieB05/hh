@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Notification, NotificationDocument, NotificationType } from './schemas/notification.schema';
@@ -21,11 +21,13 @@ export class NotificationsService {
   /**
    * Create a new notification
    */
-  /**
-   * Create a new notification
-   */
   async create(createNotificationDto: CreateNotificationDto): Promise<Notification> {
     const rawUserId = createNotificationDto.userId as any;
+    if (!rawUserId || rawUserId === 'undefined' || rawUserId === 'null') {
+      this.logger.warn(`Skipping notification creation: invalid or missing userId '${rawUserId}'`);
+      throw new BadRequestException(`Invalid or missing userId '${rawUserId}'`);
+    }
+
     const userIdObj = Types.ObjectId.isValid(rawUserId)
       ? new Types.ObjectId(rawUserId)
       : rawUserId;
@@ -36,10 +38,14 @@ export class NotificationsService {
     });
     const saved = await notification.save();
 
-    this.notificationsGateway.sendNotificationToUser(
-      String(createNotificationDto.userId),
-      saved.toObject()
-    );
+    try {
+      this.notificationsGateway.sendNotificationToUser(
+        String(createNotificationDto.userId),
+        saved.toObject()
+      );
+    } catch (wsErr: any) {
+      this.logger.warn(`WebSocket notification emission failed: ${wsErr?.message}`);
+    }
 
     // 🔥 Actually send an OS-level push (works even when app is backgrounded/killed)
     try {
@@ -394,39 +400,49 @@ export class NotificationsService {
     },
   ): Promise<void> {
     // Notify host
-    await this.create({
-      userId: hostId,
-      type: NotificationType.BOOKING_REQUEST,
-      title: 'New booking request 📅',
-      message: `${params.guestName} requested to book ${params.propertyTitle} ` +
-        `from ${params.checkIn} to ${params.checkOut}`,
-      link: `/hosting/bookings/${params.bookingId}`,
-      metadata: {
-        bookingId: params.bookingId,
-        propertyId: params.propertyId,
-        propertyTitle: params.propertyTitle,
-        guestName: params.guestName,
-        checkIn: params.checkIn,
-        checkOut: params.checkOut,
-      },
-    });
+    if (hostId && hostId !== 'undefined') {
+      try {
+        await this.create({
+          userId: hostId,
+          type: NotificationType.BOOKING_REQUEST,
+          title: 'New booking request 📅',
+          message: `${params.guestName} requested to book ${params.propertyTitle} ` +
+            `from ${params.checkIn} to ${params.checkOut}`,
+          link: `/hosting/bookings/${params.bookingId}`,
+          metadata: {
+            bookingId: params.bookingId,
+            propertyId: params.propertyId,
+            propertyTitle: params.propertyTitle,
+            guestName: params.guestName,
+            checkIn: params.checkIn,
+            checkOut: params.checkOut,
+          },
+        });
+      } catch (hostErr: any) {
+        this.logger.warn(`Failed to notify host ${hostId} for booking request: ${hostErr?.message}`);
+      }
+    }
 
     // Notify guest
-    if (params.guestId) {
-      await this.create({
-        userId: params.guestId,
-        type: NotificationType.BOOKING_REQUEST,
-        title: 'Demande de réservation envoyée 📩',
-        message: `Votre demande pour ${params.propertyTitle} (${params.checkIn} → ${params.checkOut}) a bien été transmise à l'hôte.`,
-        link: `/bookings/${params.bookingId}`,
-        metadata: {
-          bookingId: params.bookingId,
-          propertyId: params.propertyId,
-          propertyTitle: params.propertyTitle,
-          checkIn: params.checkIn,
-          checkOut: params.checkOut,
-        },
-      });
+    if (params.guestId && params.guestId !== 'undefined') {
+      try {
+        await this.create({
+          userId: params.guestId,
+          type: NotificationType.BOOKING_REQUEST,
+          title: 'Demande de réservation envoyée 📩',
+          message: `Votre demande pour ${params.propertyTitle} (${params.checkIn} → ${params.checkOut}) a bien été transmise à l'hôte.`,
+          link: `/bookings/${params.bookingId}`,
+          metadata: {
+            bookingId: params.bookingId,
+            propertyId: params.propertyId,
+            propertyTitle: params.propertyTitle,
+            checkIn: params.checkIn,
+            checkOut: params.checkOut,
+          },
+        });
+      } catch (guestErr: any) {
+        this.logger.warn(`Failed to notify guest ${params.guestId} for booking request: ${guestErr?.message}`);
+      }
     }
   }
 

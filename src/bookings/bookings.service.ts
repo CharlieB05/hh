@@ -178,9 +178,12 @@ export class BookingsService {
 
     // ── 6. Determine host ────────────────────────────────────────────────────
     const rawHostRef = property.ownerId ?? property.agentId;
-    const hostId: string = (rawHostRef as any)?._id
+    const hostIdStr: string | undefined = (rawHostRef as any)?._id
       ? (rawHostRef as any)._id.toString()
       : rawHostRef?.toString();
+    const validHostObjectId = hostIdStr && Types.ObjectId.isValid(hostIdStr)
+      ? new Types.ObjectId(hostIdStr)
+      : undefined;
 
     // ── 7. Instant book? Payment required before confirmation either way ────
     const isInstantBook = !!(property as any).isInstantBookable;
@@ -198,7 +201,7 @@ export class BookingsService {
       propertyId: new Types.ObjectId(dto.propertyId),
       ...(dto.roomId ? { roomId: new Types.ObjectId(dto.roomId) } : {}),
       guestId: guest._id,
-      hostId: new Types.ObjectId(hostId),
+      ...(validHostObjectId ? { hostId: validHostObjectId } : {}),
       checkIn,
       checkOut,
       nights,
@@ -221,38 +224,47 @@ export class BookingsService {
     const fmt = (d: Date) => d.toISOString().split('T')[0];
     const propertyTitle = (property as any).title ?? 'your property';
     const guestIdStr = guest._id.toString();
+    const bookingIdStr = saved._id.toString();
 
-    if (isInstantBook) {
-      // Guest gets immediate booking confirmed notification
-      await this.notificationsService.notifyBookingConfirmed(guestIdStr, {
-        bookingId: saved._id.toString(),
-        propertyId: dto.propertyId,
-        propertyTitle,
-        hostName: (property.ownerId as any)?.name ?? 'Host',
-        checkIn: fmt(checkIn),
-        checkOut: fmt(checkOut),
-      });
-      // Host also gets notified of the instant booking
-      await this.notificationsService.notifyBookingRequest(hostId, {
-        guestId: guestIdStr,
-        bookingId: saved._id.toString(),
-        propertyId: dto.propertyId,
-        propertyTitle,
-        guestName: guest.name,
-        checkIn: fmt(checkIn),
-        checkOut: fmt(checkOut),
-      });
-    } else {
-      // Host & Guest both get booking request notifications
-      await this.notificationsService.notifyBookingRequest(hostId, {
-        guestId: guestIdStr,
-        bookingId: saved._id.toString(),
-        propertyId: dto.propertyId,
-        propertyTitle,
-        guestName: guest.name,
-        checkIn: fmt(checkIn),
-        checkOut: fmt(checkOut),
-      });
+    // ── Send notifications (non-fatal — booking already persisted) ────────────
+    try {
+      if (isInstantBook) {
+        // Guest: booking confirmed (instant-book triggers immediately)
+        await this.notificationsService.notifyBookingConfirmed(guestIdStr, {
+          bookingId: bookingIdStr,
+          propertyId: dto.propertyId,
+          propertyTitle,
+          hostName: (property.ownerId as any)?.name ?? 'Host',
+          checkIn: fmt(checkIn),
+          checkOut: fmt(checkOut),
+        });
+        // Host: notified of the instant booking
+        await this.notificationsService.notifyBookingRequest(hostIdStr ?? '', {
+          guestId: guestIdStr,
+          bookingId: bookingIdStr,
+          propertyId: dto.propertyId,
+          propertyTitle,
+          guestName: guest.name,
+          checkIn: fmt(checkIn),
+          checkOut: fmt(checkOut),
+        });
+      } else {
+        // Host & Guest: booking request submitted (non-instant)
+        await this.notificationsService.notifyBookingRequest(hostIdStr ?? '', {
+          guestId: guestIdStr,
+          bookingId: bookingIdStr,
+          propertyId: dto.propertyId,
+          propertyTitle,
+          guestName: guest.name,
+          checkIn: fmt(checkIn),
+          checkOut: fmt(checkOut),
+        });
+      }
+    } catch (notifErr: any) {
+      // Non-fatal: the booking is already saved. Log so it's visible in server logs.
+      this.logger.warn(
+        `createBooking: notification delivery failed for booking ${bookingIdStr}: ${notifErr?.message}`,
+      );
     }
 
     return saved;

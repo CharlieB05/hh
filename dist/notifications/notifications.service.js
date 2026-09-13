@@ -32,6 +32,10 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
     }
     async create(createNotificationDto) {
         const rawUserId = createNotificationDto.userId;
+        if (!rawUserId || rawUserId === 'undefined' || rawUserId === 'null') {
+            this.logger.warn(`Skipping notification creation: invalid or missing userId '${rawUserId}'`);
+            throw new common_1.BadRequestException(`Invalid or missing userId '${rawUserId}'`);
+        }
         const userIdObj = mongoose_2.Types.ObjectId.isValid(rawUserId)
             ? new mongoose_2.Types.ObjectId(rawUserId)
             : rawUserId;
@@ -40,7 +44,12 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
             userId: userIdObj,
         });
         const saved = await notification.save();
-        this.notificationsGateway.sendNotificationToUser(String(createNotificationDto.userId), saved.toObject());
+        try {
+            this.notificationsGateway.sendNotificationToUser(String(createNotificationDto.userId), saved.toObject());
+        }
+        catch (wsErr) {
+            this.logger.warn(`WebSocket notification emission failed: ${wsErr?.message}`);
+        }
         try {
             await this.pushNotificationsService.sendToUser(String(createNotificationDto.userId), {
                 title: createNotificationDto.title,
@@ -256,37 +265,49 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
         });
     }
     async notifyBookingRequest(hostId, params) {
-        await this.create({
-            userId: hostId,
-            type: notification_schema_1.NotificationType.BOOKING_REQUEST,
-            title: 'New booking request 📅',
-            message: `${params.guestName} requested to book ${params.propertyTitle} ` +
-                `from ${params.checkIn} to ${params.checkOut}`,
-            link: `/hosting/bookings/${params.bookingId}`,
-            metadata: {
-                bookingId: params.bookingId,
-                propertyId: params.propertyId,
-                propertyTitle: params.propertyTitle,
-                guestName: params.guestName,
-                checkIn: params.checkIn,
-                checkOut: params.checkOut,
-            },
-        });
-        if (params.guestId) {
-            await this.create({
-                userId: params.guestId,
-                type: notification_schema_1.NotificationType.BOOKING_REQUEST,
-                title: 'Demande de réservation envoyée 📩',
-                message: `Votre demande pour ${params.propertyTitle} (${params.checkIn} → ${params.checkOut}) a bien été transmise à l'hôte.`,
-                link: `/bookings/${params.bookingId}`,
-                metadata: {
-                    bookingId: params.bookingId,
-                    propertyId: params.propertyId,
-                    propertyTitle: params.propertyTitle,
-                    checkIn: params.checkIn,
-                    checkOut: params.checkOut,
-                },
-            });
+        if (hostId && hostId !== 'undefined') {
+            try {
+                await this.create({
+                    userId: hostId,
+                    type: notification_schema_1.NotificationType.BOOKING_REQUEST,
+                    title: 'New booking request 📅',
+                    message: `${params.guestName} requested to book ${params.propertyTitle} ` +
+                        `from ${params.checkIn} to ${params.checkOut}`,
+                    link: `/hosting/bookings/${params.bookingId}`,
+                    metadata: {
+                        bookingId: params.bookingId,
+                        propertyId: params.propertyId,
+                        propertyTitle: params.propertyTitle,
+                        guestName: params.guestName,
+                        checkIn: params.checkIn,
+                        checkOut: params.checkOut,
+                    },
+                });
+            }
+            catch (hostErr) {
+                this.logger.warn(`Failed to notify host ${hostId} for booking request: ${hostErr?.message}`);
+            }
+        }
+        if (params.guestId && params.guestId !== 'undefined') {
+            try {
+                await this.create({
+                    userId: params.guestId,
+                    type: notification_schema_1.NotificationType.BOOKING_REQUEST,
+                    title: 'Demande de réservation envoyée 📩',
+                    message: `Votre demande pour ${params.propertyTitle} (${params.checkIn} → ${params.checkOut}) a bien été transmise à l'hôte.`,
+                    link: `/bookings/${params.bookingId}`,
+                    metadata: {
+                        bookingId: params.bookingId,
+                        propertyId: params.propertyId,
+                        propertyTitle: params.propertyTitle,
+                        checkIn: params.checkIn,
+                        checkOut: params.checkOut,
+                    },
+                });
+            }
+            catch (guestErr) {
+                this.logger.warn(`Failed to notify guest ${params.guestId} for booking request: ${guestErr?.message}`);
+            }
         }
     }
     async notifyBookingConfirmed(guestId, params) {
