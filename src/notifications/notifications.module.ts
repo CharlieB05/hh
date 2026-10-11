@@ -10,6 +10,7 @@ import { PushNotificationsService } from './push-notifications.service';   // �
 import { Notification, NotificationSchema } from './schemas/notification.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';           // ← add
 import { DevicesModule } from '../devices/devices.module';                 // ← add
+import { EmailModule } from '../email/email.module';                       // ← add
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DevicesModule } from '../devices/devices.module';                 // �
       { name: User.name, schema: UserSchema },   // ← add — PushNotificationsService injects this
     ]),
     DevicesModule,   // ← add — provides DevicesService that PushNotificationsService needs
+    EmailModule,     // ← add — provides EmailService for admin notification emails
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {

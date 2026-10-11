@@ -615,4 +615,49 @@ private async safeSendMail(options: SendMailOptions): Promise<void> {
     `),
   });
 }
+
+  // ─── Admin Notification Email ───────────────────────────────────────────────
+
+  async sendAdminNotificationEmail(
+    recipientEmail: string,
+    recipientName: string,
+    title: string,
+    message: string,
+    link?: string,
+  ): Promise<void> {
+    const displayName = this.display(recipientName);
+    const ctaHtml = link
+      ? `<div style="margin-top:24px;">${this.btn(`${this.frontendUrl}${link}`, 'View Details')}</div>`
+      : '';
+
+    await this.safeSendMail({
+      to: recipientEmail,
+      subject: `${title} — ${this.brandName}`,
+      text: `Hi ${displayName},\n\n${message}\n\n${link ? `View more: ${this.frontendUrl}${link}` : ''}\n\n— The ${this.brandName} Team`,
+      html: this.buildAdminNotificationTemplate({
+        ...this.baseParams(),
+        recipientName: displayName,
+        title,
+        message,
+        ctaHtml,
+      }),
+    });
+  }
+
+  private buildAdminNotificationTemplate(p: BaseTemplateParams & {
+    title: string;
+    message: string;
+    ctaHtml: string;
+  }): string {
+    return this.layout(p.brandName, `
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="display:inline-block;background:#155dfc;color:#fff;border-radius:50%;width:56px;height:56px;line-height:56px;font-size:24px;">📢</div>
+      </div>
+      <h2 style="margin-top:0;text-align:center;">${p.title}</h2>
+      <p style="line-height:1.6;">Hi ${p.recipientName},</p>
+      <p style="line-height:1.6;white-space:pre-wrap;">${p.message}</p>
+      ${p.ctaHtml}
+      <p style="margin-top:24px;">— The ${p.brandName} Team</p>
+    `);
+  }
 }

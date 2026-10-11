@@ -103,7 +103,5 @@ exports.ConversationSchema.index({ isArchived: 1, 'lastMessage.createdAt': -1 })
 exports.ConversationSchema.index({
     'participants.userId': 1,
     propertyId: 1
-}, {
-    unique: true
 });
 //# sourceMappingURL=conversation.schema.js.map

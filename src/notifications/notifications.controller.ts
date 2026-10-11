@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Query,
+  Body,
   UseGuards,
   Req,
   HttpCode,
@@ -24,7 +25,10 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 import { NotificationsService } from './notifications.service';
 import { QueryNotificationDto } from './dto/query-notification.dto';
+import { AdminSendNotificationDto } from './dto/admin-send-notification.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.auth.guard';
+import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+import { UserRole } from '../users/schemas/user.schema';
 import { NotificationType } from './schemas/notification.schema';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -195,5 +199,41 @@ export class NotificationsController {
   ) {
     const userId = extractUserId(req);
     await this.notificationsService.delete(notificationId, userId);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ADMIN — Send Notifications
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * POST /notifications/admin/send
+   * Admin-only: Send a general broadcast, role-targeted, or personal
+   * notification via in-app push, email, or both channels.
+   */
+  @Post('admin/send')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: '[Admin] Send notification to users' })
+  @ApiResponse({ status: 201, description: 'Notification sent successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden — admin role required' })
+  async adminSendNotification(
+    @Req() req: any,
+    @Body() dto: AdminSendNotificationDto,
+  ) {
+    const adminId = extractUserId(req);
+    return this.notificationsService.adminSendNotification(adminId, dto);
+  }
+
+  /**
+   * GET /notifications/admin/stats
+   * Admin-only: Get WebSocket gateway statistics.
+   */
+  @Get('admin/stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: '[Admin] Get notification gateway statistics' })
+  @ApiResponse({ status: 200, description: 'Gateway stats' })
+  async adminGetStats() {
+    return this.notificationsService.getAdminStats();
   }
 }

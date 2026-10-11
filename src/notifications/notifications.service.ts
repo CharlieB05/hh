@@ -3,9 +3,12 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Notification, NotificationDocument, NotificationType } from './schemas/notification.schema';
 import { CreateNotificationDto } from './dto/create-notification.dto';
+import { AdminSendNotificationDto, AdminNotifTarget, AdminNotifChannel } from './dto/admin-send-notification.dto';
 import { QueryNotificationDto } from './dto/query-notification.dto';
 import { NotificationsGateway } from './notifications.gateway';
 import { PushNotificationsService } from './push-notifications.service';
+import { EmailService } from '../email/email.service';
+import { User, UserDocument } from '../users/schemas/user.schema';
 
 @Injectable()
 export class NotificationsService {
@@ -14,8 +17,11 @@ export class NotificationsService {
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
     private notificationsGateway: NotificationsGateway,
     private pushNotificationsService: PushNotificationsService,
+    private emailService: EmailService,
   ) { }
 
   /**
@@ -881,6 +887,149 @@ export class NotificationsService {
         currency: params.currency,
       },
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ADMIN — Send Notifications
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Admin: Send a notification (push / email / both) to all users,
+   * a specific role, or a list of specific users.
+   */
+  async adminSendNotification(
+    adminId: string,
+    dto: AdminSendNotificationDto,
+  ): Promise<{
+    sent: number;
+    channel: string;
+    target: string;
+  }> {
+    this.logger.log(`[Admin] Admin ${adminId} sending notification: target=${dto.target}, channel=${dto.channel}`);
+
+    // 1) Resolve target users
+    const users = await this.resolveTargetUsers(dto);
+
+    if (users.length === 0) {
+      this.logger.warn(`[Admin] No users found for target=${dto.target}`);
+      return { sent: 0, channel: dto.channel ?? 'push', target: dto.target };
+    }
+
+    const channel = dto.channel ?? AdminNotifChannel.PUSH;
+    const type = dto.type ?? NotificationType.SYSTEM;
+    let sentCount = 0;
+
+    // 2) Send in-app push notification (creates DB record + WebSocket + OS push)
+    if (channel === AdminNotifChannel.PUSH || channel === AdminNotifChannel.BOTH) {
+      const userIds = users.map(u => u._id.toString());
+
+      try {
+        await this.createBulk(userIds, {
+          type,
+          title: dto.title,
+          message: dto.message,
+          link: dto.link,
+          metadata: {
+            ...dto.metadata,
+            sentByAdmin: adminId,
+          },
+        });
+        sentCount = userIds.length;
+        this.logger.log(`[Admin] Push notifications sent to ${userIds.length} users`);
+      } catch (err: any) {
+        this.logger.error(`[Admin] Bulk push send failed: ${err?.message}`);
+      }
+
+      // Also send OS-level push to each user
+      for (const uid of userIds) {
+        try {
+          await this.pushNotificationsService.sendToUser(uid, {
+            title: dto.title,
+            body: dto.message,
+            data: { route: dto.link },
+          });
+        } catch (pushErr: any) {
+          this.logger.warn(`[Admin] Push to user ${uid} failed: ${pushErr?.message}`);
+        }
+      }
+    }
+
+    // 3) Send email
+    if (channel === AdminNotifChannel.EMAIL || channel === AdminNotifChannel.BOTH) {
+      let emailsSent = 0;
+
+      for (const user of users) {
+        const email = user.email;
+        if (!email) continue;
+
+        try {
+          const displayName = user.firstName
+            ? `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`
+            : email;
+
+          await this.emailService.sendAdminNotificationEmail(
+            email,
+            displayName,
+            dto.title,
+            dto.message,
+            dto.link,
+          );
+          emailsSent++;
+        } catch (emailErr: any) {
+          this.logger.warn(`[Admin] Email to ${email} failed: ${emailErr?.message}`);
+        }
+      }
+
+      this.logger.log(`[Admin] Emails sent: ${emailsSent}/${users.length}`);
+      if (channel === AdminNotifChannel.EMAIL) {
+        sentCount = emailsSent;
+      }
+    }
+
+    return {
+      sent: sentCount,
+      channel,
+      target: dto.target === AdminNotifTarget.ROLE
+        ? `role:${dto.role}`
+        : dto.target === AdminNotifTarget.USERS
+          ? `users:${dto.userIds?.length ?? 0}`
+          : 'all',
+    };
+  }
+
+  /**
+   * Resolve which users to target based on the AdminSendNotificationDto.
+   */
+  private async resolveTargetUsers(
+    dto: AdminSendNotificationDto,
+  ): Promise<Array<{ _id: Types.ObjectId; email?: string; firstName?: string; lastName?: string }>> {
+    const projection = { _id: 1, email: 1, firstName: 1, lastName: 1 };
+
+    switch (dto.target) {
+      case AdminNotifTarget.ALL:
+        return this.userModel.find({}, projection).lean().exec();
+
+      case AdminNotifTarget.ROLE:
+        if (!dto.role) throw new BadRequestException('Role is required when target is "role"');
+        return this.userModel.find({ role: dto.role }, projection).lean().exec();
+
+      case AdminNotifTarget.USERS:
+        if (!dto.userIds?.length) throw new BadRequestException('userIds required when target is "users"');
+        const objectIds = dto.userIds
+          .filter(id => Types.ObjectId.isValid(id))
+          .map(id => new Types.ObjectId(id));
+        return this.userModel.find({ _id: { $in: objectIds } }, projection).lean().exec();
+
+      default:
+        throw new BadRequestException(`Unknown target: ${dto.target}`);
+    }
+  }
+
+  /**
+   * Admin: Get WebSocket gateway statistics.
+   */
+  getAdminStats() {
+    return this.notificationsGateway.getGatewayStats();
   }
 
 }

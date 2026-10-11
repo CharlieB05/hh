@@ -33,9 +33,31 @@ let ChatService = ChatService_1 = class ChatService {
         this.propertyModel = propertyModel;
         this.userModel = userModel;
     }
+    async onModuleInit() {
+        try {
+            const col = this.conversationModel.collection;
+            const indexes = await col.indexes();
+            const badIndex = indexes.find(idx => idx.name === 'participants.userId_1_propertyId_1');
+            if (badIndex && badIndex.unique) {
+                this.logger.warn('Dropping legacy unique index participants.userId_1_propertyId_1');
+                await col.dropIndex('participants.userId_1_propertyId_1');
+            }
+        }
+        catch (e) {
+        }
+    }
     async createConversation(userId, dto) {
         try {
             const { participantId, propertyId, initialMessage } = dto;
+            if (userId === participantId) {
+                throw new common_1.BadRequestException('You cannot start a conversation with yourself');
+            }
+            if (!mongoose_2.Types.ObjectId.isValid(userId) || !mongoose_2.Types.ObjectId.isValid(participantId)) {
+                throw new common_1.BadRequestException('Invalid user ID format');
+            }
+            if (propertyId && !mongoose_2.Types.ObjectId.isValid(propertyId)) {
+                throw new common_1.BadRequestException('Invalid property ID format');
+            }
             const [user, participant] = await Promise.all([
                 this.userModel.findById(userId),
                 this.userModel.findById(participantId),
@@ -82,21 +104,35 @@ let ChatService = ChatService_1 = class ChatService {
             return conversation;
         }
         catch (error) {
+            if (error?.code === 11000) {
+                this.logger.warn('Duplicate key error on conversation creation, fetching existing conversation');
+                const existing = await this.findExistingConversation(userId, dto.participantId, dto.propertyId);
+                if (existing)
+                    return existing;
+            }
             this.logger.error('Error creating conversation:', error);
             throw error;
         }
     }
     async findExistingConversation(userId1, userId2, propertyId) {
-        const query = {
-            'participants.userId': {
-                $all: [new mongoose_2.Types.ObjectId(userId1), new mongoose_2.Types.ObjectId(userId2)],
-            },
-        };
+        const u1 = new mongoose_2.Types.ObjectId(userId1);
+        const u2 = new mongoose_2.Types.ObjectId(userId2);
         if (propertyId) {
-            query.propertyId = new mongoose_2.Types.ObjectId(propertyId);
+            const propConv = await this.conversationModel
+                .findOne({
+                'participants.userId': { $all: [u1, u2] },
+                propertyId: new mongoose_2.Types.ObjectId(propertyId),
+            })
+                .populate('participants.userId', 'name profilePicture email phoneNumber')
+                .populate('propertyId', 'title images price address city')
+                .exec();
+            if (propConv)
+                return propConv;
         }
         return this.conversationModel
-            .findOne(query)
+            .findOne({
+            'participants.userId': { $all: [u1, u2] },
+        })
             .populate('participants.userId', 'name profilePicture email phoneNumber')
             .populate('propertyId', 'title images price address city')
             .exec();

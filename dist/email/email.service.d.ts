@@ -62,4 +62,6 @@ export declare class EmailService {
     private buildPaymentRequestTemplate;
     private buildHostNewBookingTemplate;
     sendNewsletterWelcome(recipientEmail: string): Promise<void>;
+    sendAdminNotificationEmail(recipientEmail: string, recipientName: string, title: string, message: string, link?: string): Promise<void>;
+    private buildAdminNotificationTemplate;
 }

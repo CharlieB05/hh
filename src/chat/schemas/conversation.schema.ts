@@ -86,6 +86,4 @@ ConversationSchema.index({ isArchived: 1, 'lastMessage.createdAt': -1 });
 ConversationSchema.index({ 
   'participants.userId': 1, 
   propertyId: 1 
-}, { 
-  unique: true 
 });

@@ -18,6 +18,7 @@ const push_notifications_service_1 = require("./push-notifications.service");
 const notification_schema_1 = require("./schemas/notification.schema");
 const user_schema_1 = require("../users/schemas/user.schema");
 const devices_module_1 = require("../devices/devices.module");
+const email_module_1 = require("../email/email.module");
 let NotificationsModule = class NotificationsModule {
 };
 exports.NotificationsModule = NotificationsModule;
@@ -29,6 +30,7 @@ exports.NotificationsModule = NotificationsModule = __decorate([
                 { name: user_schema_1.User.name, schema: user_schema_1.UserSchema },
             ]),
             devices_module_1.DevicesModule,
+            email_module_1.EmailModule,
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: (configService) => {

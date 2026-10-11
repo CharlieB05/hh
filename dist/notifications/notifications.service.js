@@ -18,17 +18,24 @@ const common_1 = require("@nestjs/common");
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const notification_schema_1 = require("./schemas/notification.schema");
+const admin_send_notification_dto_1 = require("./dto/admin-send-notification.dto");
 const notifications_gateway_1 = require("./notifications.gateway");
 const push_notifications_service_1 = require("./push-notifications.service");
+const email_service_1 = require("../email/email.service");
+const user_schema_1 = require("../users/schemas/user.schema");
 let NotificationsService = NotificationsService_1 = class NotificationsService {
     notificationModel;
+    userModel;
     notificationsGateway;
     pushNotificationsService;
+    emailService;
     logger = new common_1.Logger(NotificationsService_1.name);
-    constructor(notificationModel, notificationsGateway, pushNotificationsService) {
+    constructor(notificationModel, userModel, notificationsGateway, pushNotificationsService, emailService) {
         this.notificationModel = notificationModel;
+        this.userModel = userModel;
         this.notificationsGateway = notificationsGateway;
         this.pushNotificationsService = pushNotificationsService;
+        this.emailService = emailService;
     }
     async create(createNotificationDto) {
         const rawUserId = createNotificationDto.userId;
@@ -544,13 +551,113 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
             },
         });
     }
+    async adminSendNotification(adminId, dto) {
+        this.logger.log(`[Admin] Admin ${adminId} sending notification: target=${dto.target}, channel=${dto.channel}`);
+        const users = await this.resolveTargetUsers(dto);
+        if (users.length === 0) {
+            this.logger.warn(`[Admin] No users found for target=${dto.target}`);
+            return { sent: 0, channel: dto.channel ?? 'push', target: dto.target };
+        }
+        const channel = dto.channel ?? admin_send_notification_dto_1.AdminNotifChannel.PUSH;
+        const type = dto.type ?? notification_schema_1.NotificationType.SYSTEM;
+        let sentCount = 0;
+        if (channel === admin_send_notification_dto_1.AdminNotifChannel.PUSH || channel === admin_send_notification_dto_1.AdminNotifChannel.BOTH) {
+            const userIds = users.map(u => u._id.toString());
+            try {
+                await this.createBulk(userIds, {
+                    type,
+                    title: dto.title,
+                    message: dto.message,
+                    link: dto.link,
+                    metadata: {
+                        ...dto.metadata,
+                        sentByAdmin: adminId,
+                    },
+                });
+                sentCount = userIds.length;
+                this.logger.log(`[Admin] Push notifications sent to ${userIds.length} users`);
+            }
+            catch (err) {
+                this.logger.error(`[Admin] Bulk push send failed: ${err?.message}`);
+            }
+            for (const uid of userIds) {
+                try {
+                    await this.pushNotificationsService.sendToUser(uid, {
+                        title: dto.title,
+                        body: dto.message,
+                        data: { route: dto.link },
+                    });
+                }
+                catch (pushErr) {
+                    this.logger.warn(`[Admin] Push to user ${uid} failed: ${pushErr?.message}`);
+                }
+            }
+        }
+        if (channel === admin_send_notification_dto_1.AdminNotifChannel.EMAIL || channel === admin_send_notification_dto_1.AdminNotifChannel.BOTH) {
+            let emailsSent = 0;
+            for (const user of users) {
+                const email = user.email;
+                if (!email)
+                    continue;
+                try {
+                    const displayName = user.firstName
+                        ? `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`
+                        : email;
+                    await this.emailService.sendAdminNotificationEmail(email, displayName, dto.title, dto.message, dto.link);
+                    emailsSent++;
+                }
+                catch (emailErr) {
+                    this.logger.warn(`[Admin] Email to ${email} failed: ${emailErr?.message}`);
+                }
+            }
+            this.logger.log(`[Admin] Emails sent: ${emailsSent}/${users.length}`);
+            if (channel === admin_send_notification_dto_1.AdminNotifChannel.EMAIL) {
+                sentCount = emailsSent;
+            }
+        }
+        return {
+            sent: sentCount,
+            channel,
+            target: dto.target === admin_send_notification_dto_1.AdminNotifTarget.ROLE
+                ? `role:${dto.role}`
+                : dto.target === admin_send_notification_dto_1.AdminNotifTarget.USERS
+                    ? `users:${dto.userIds?.length ?? 0}`
+                    : 'all',
+        };
+    }
+    async resolveTargetUsers(dto) {
+        const projection = { _id: 1, email: 1, firstName: 1, lastName: 1 };
+        switch (dto.target) {
+            case admin_send_notification_dto_1.AdminNotifTarget.ALL:
+                return this.userModel.find({}, projection).lean().exec();
+            case admin_send_notification_dto_1.AdminNotifTarget.ROLE:
+                if (!dto.role)
+                    throw new common_1.BadRequestException('Role is required when target is "role"');
+                return this.userModel.find({ role: dto.role }, projection).lean().exec();
+            case admin_send_notification_dto_1.AdminNotifTarget.USERS:
+                if (!dto.userIds?.length)
+                    throw new common_1.BadRequestException('userIds required when target is "users"');
+                const objectIds = dto.userIds
+                    .filter(id => mongoose_2.Types.ObjectId.isValid(id))
+                    .map(id => new mongoose_2.Types.ObjectId(id));
+                return this.userModel.find({ _id: { $in: objectIds } }, projection).lean().exec();
+            default:
+                throw new common_1.BadRequestException(`Unknown target: ${dto.target}`);
+        }
+    }
+    getAdminStats() {
+        return this.notificationsGateway.getGatewayStats();
+    }
 };
 exports.NotificationsService = NotificationsService;
 exports.NotificationsService = NotificationsService = NotificationsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, mongoose_1.InjectModel)(notification_schema_1.Notification.name)),
+    __param(1, (0, mongoose_1.InjectModel)(user_schema_1.User.name)),
     __metadata("design:paramtypes", [mongoose_2.Model,
+        mongoose_2.Model,
         notifications_gateway_1.NotificationsGateway,
-        push_notifications_service_1.PushNotificationsService])
+        push_notifications_service_1.PushNotificationsService,
+        email_service_1.EmailService])
 ], NotificationsService);
 //# sourceMappingURL=notifications.service.js.map

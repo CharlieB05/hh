@@ -18,7 +18,10 @@ const swagger_1 = require("@nestjs/swagger");
 const throttler_1 = require("@nestjs/throttler");
 const notifications_service_1 = require("./notifications.service");
 const query_notification_dto_1 = require("./dto/query-notification.dto");
+const admin_send_notification_dto_1 = require("./dto/admin-send-notification.dto");
 const jwt_auth_guard_1 = require("../auth/guards/jwt.auth.guard");
+const roles_guard_1 = require("../auth/guards/roles.guard");
+const user_schema_1 = require("../users/schemas/user.schema");
 const notification_schema_1 = require("./schemas/notification.schema");
 function extractUserId(req) {
     const userId = req.user?.userId ?? req.user?._id?.toString() ?? req.user?.id;
@@ -75,6 +78,13 @@ let NotificationsController = class NotificationsController {
     async deleteNotification(req, notificationId) {
         const userId = extractUserId(req);
         await this.notificationsService.delete(notificationId, userId);
+    }
+    async adminSendNotification(req, dto) {
+        const adminId = extractUserId(req);
+        return this.notificationsService.adminSendNotification(adminId, dto);
+    }
+    async adminGetStats() {
+        return this.notificationsService.getAdminStats();
     }
 };
 exports.NotificationsController = NotificationsController;
@@ -168,6 +178,29 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], NotificationsController.prototype, "deleteNotification", null);
+__decorate([
+    (0, common_1.Post)('admin/send'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: '[Admin] Send notification to users' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'Notification sent successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: 'Forbidden — admin role required' }),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, admin_send_notification_dto_1.AdminSendNotificationDto]),
+    __metadata("design:returntype", Promise)
+], NotificationsController.prototype, "adminSendNotification", null);
+__decorate([
+    (0, common_1.Get)('admin/stats'),
+    (0, common_1.UseGuards)(roles_guard_1.RolesGuard),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiOperation)({ summary: '[Admin] Get notification gateway statistics' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Gateway stats' }),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], NotificationsController.prototype, "adminGetStats", null);
 exports.NotificationsController = NotificationsController = __decorate([
     (0, swagger_1.ApiTags)('Notifications'),
     (0, swagger_1.ApiBearerAuth)(),

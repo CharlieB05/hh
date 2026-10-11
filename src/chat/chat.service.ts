@@ -4,6 +4,7 @@ import {
     BadRequestException,
     ForbiddenException,
     Logger,
+    OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -31,7 +32,7 @@ import {
 } from './dto/chat.dto';
 
 @Injectable()
-export class ChatService {
+export class ChatService implements OnModuleInit {
     private readonly logger = new Logger(ChatService.name);
 
     constructor(
@@ -40,6 +41,20 @@ export class ChatService {
         @InjectModel(Property.name) private propertyModel: Model<PropertyDocument>,
         @InjectModel(User.name) private userModel: Model<UserDocument>,
     ) { }
+
+    async onModuleInit() {
+        try {
+            const col = this.conversationModel.collection;
+            const indexes = await col.indexes();
+            const badIndex = indexes.find(idx => idx.name === 'participants.userId_1_propertyId_1');
+            if (badIndex && (badIndex as any).unique) {
+                this.logger.warn('Dropping legacy unique index participants.userId_1_propertyId_1');
+                await col.dropIndex('participants.userId_1_propertyId_1');
+            }
+        } catch (e) {
+            // Ignore if index doesn't exist or collection isn't created yet
+        }
+    }
 
     /**
      * Create or get existing conversation
@@ -50,6 +65,18 @@ export class ChatService {
     ): Promise<Conversation> {
         try {
             const { participantId, propertyId, initialMessage } = dto;
+
+            if (userId === participantId) {
+                throw new BadRequestException('You cannot start a conversation with yourself');
+            }
+
+            if (!Types.ObjectId.isValid(userId) || !Types.ObjectId.isValid(participantId)) {
+                throw new BadRequestException('Invalid user ID format');
+            }
+
+            if (propertyId && !Types.ObjectId.isValid(propertyId)) {
+                throw new BadRequestException('Invalid property ID format');
+            }
 
             // Validate users exist
             const [user, participant] = await Promise.all([
@@ -112,7 +139,12 @@ export class ChatService {
 
             this.logger.log(`Created conversation: ${conversation._id}`);
             return conversation;
-        } catch (error) {
+        } catch (error: any) {
+            if (error?.code === 11000) {
+                this.logger.warn('Duplicate key error on conversation creation, fetching existing conversation');
+                const existing = await this.findExistingConversation(userId, dto.participantId, dto.propertyId);
+                if (existing) return existing;
+            }
             this.logger.error('Error creating conversation:', error);
             throw error;
         }
@@ -126,18 +158,28 @@ export class ChatService {
         userId2: string,
         propertyId?: string,
     ): Promise<Conversation | null> {
-        const query: any = {
-            'participants.userId': {
-                $all: [new Types.ObjectId(userId1), new Types.ObjectId(userId2)],
-            },
-        };
+        const u1 = new Types.ObjectId(userId1);
+        const u2 = new Types.ObjectId(userId2);
 
+        // 1. First try finding conversation matching both users AND propertyId (if provided)
         if (propertyId) {
-            query.propertyId = new Types.ObjectId(propertyId);
+            const propConv = await this.conversationModel
+                .findOne({
+                    'participants.userId': { $all: [u1, u2] },
+                    propertyId: new Types.ObjectId(propertyId),
+                })
+                .populate('participants.userId', 'name profilePicture email phoneNumber')
+                .populate('propertyId', 'title images price address city')
+                .exec();
+
+            if (propConv) return propConv;
         }
 
+        // 2. Fall back to finding any existing direct conversation between these 2 users
         return this.conversationModel
-            .findOne(query)
+            .findOne({
+                'participants.userId': { $all: [u1, u2] },
+            })
             .populate('participants.userId', 'name profilePicture email phoneNumber')
             .populate('propertyId', 'title images price address city')
             .exec();

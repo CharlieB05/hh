@@ -1,15 +1,20 @@
 import { Model } from 'mongoose';
 import { Notification, NotificationDocument } from './schemas/notification.schema';
 import { CreateNotificationDto } from './dto/create-notification.dto';
+import { AdminSendNotificationDto } from './dto/admin-send-notification.dto';
 import { QueryNotificationDto } from './dto/query-notification.dto';
 import { NotificationsGateway } from './notifications.gateway';
 import { PushNotificationsService } from './push-notifications.service';
+import { EmailService } from '../email/email.service';
+import { UserDocument } from '../users/schemas/user.schema';
 export declare class NotificationsService {
     private notificationModel;
+    private userModel;
     private notificationsGateway;
     private pushNotificationsService;
+    private emailService;
     private readonly logger;
-    constructor(notificationModel: Model<NotificationDocument>, notificationsGateway: NotificationsGateway, pushNotificationsService: PushNotificationsService);
+    constructor(notificationModel: Model<NotificationDocument>, userModel: Model<UserDocument>, notificationsGateway: NotificationsGateway, pushNotificationsService: PushNotificationsService, emailService: EmailService);
     create(createNotificationDto: CreateNotificationDto): Promise<Notification>;
     createBulk(userIds: string[], notificationData: Omit<CreateNotificationDto, 'userId'>): Promise<any[]>;
     findByUser(userId: string, query: QueryNotificationDto): Promise<{
@@ -129,4 +134,19 @@ export declare class NotificationsService {
         amount: number;
         currency: string;
     }): Promise<void>;
+    adminSendNotification(adminId: string, dto: AdminSendNotificationDto): Promise<{
+        sent: number;
+        channel: string;
+        target: string;
+    }>;
+    private resolveTargetUsers;
+    getAdminStats(): {
+        totalUsers: number;
+        totalConnections: number;
+        connectedUsers: {
+            userId: string;
+            connections: number;
+        }[];
+        timestamp: string;
+    };
 }

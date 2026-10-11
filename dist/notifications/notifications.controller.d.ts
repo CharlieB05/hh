@@ -1,5 +1,6 @@
 import { NotificationsService } from './notifications.service';
 import { QueryNotificationDto } from './dto/query-notification.dto';
+import { AdminSendNotificationDto } from './dto/admin-send-notification.dto';
 export declare class NotificationsController {
     private readonly notificationsService;
     constructor(notificationsService: NotificationsService);
@@ -23,4 +24,18 @@ export declare class NotificationsController {
         deletedCount: number;
     }>;
     deleteNotification(req: any, notificationId: string): Promise<void>;
+    adminSendNotification(req: any, dto: AdminSendNotificationDto): Promise<{
+        sent: number;
+        channel: string;
+        target: string;
+    }>;
+    adminGetStats(): Promise<{
+        totalUsers: number;
+        totalConnections: number;
+        connectedUsers: {
+            userId: string;
+            connections: number;
+        }[];
+        timestamp: string;
+    }>;
 }

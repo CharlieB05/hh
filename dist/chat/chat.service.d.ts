@@ -1,16 +1,18 @@
+import { OnModuleInit } from '@nestjs/common';
 import { Model, Types } from 'mongoose';
 import { Conversation, ConversationDocument } from './schemas/conversation.schema';
 import { Message, MessageAttachment, MessageDocument, MessageStatus } from './schemas/message.schema';
 import { PropertyDocument } from '../properties/schemas/property.schema';
 import { UserDocument } from '../users/schemas/user.schema';
 import { CreateConversationDto, SendMessageDto, GetMessagesQueryDto, GetConversationsQueryDto, EditMessageDto } from './dto/chat.dto';
-export declare class ChatService {
+export declare class ChatService implements OnModuleInit {
     private conversationModel;
     private messageModel;
     private propertyModel;
     private userModel;
     private readonly logger;
     constructor(conversationModel: Model<ConversationDocument>, messageModel: Model<MessageDocument>, propertyModel: Model<PropertyDocument>, userModel: Model<UserDocument>);
+    onModuleInit(): Promise<void>;
     createConversation(userId: string, dto: CreateConversationDto): Promise<Conversation>;
     private findExistingConversation;
     getConversations(userId: string, query: GetConversationsQueryDto): Promise<{
