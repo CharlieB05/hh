@@ -25,7 +25,16 @@ export class PushNotificationsService implements OnModuleInit {
   async onModuleInit() {
     const { Expo } = await dynamicImport('expo-server-sdk');
     this.ExpoClass = Expo;
-    this.expo = new Expo();
+
+    const accessToken = process.env.EXPO_ACCESS_TOKEN;
+    if (!accessToken) {
+      this.logger.warn(
+        '⚠️  EXPO_ACCESS_TOKEN is not set! Push notifications will likely fail. ' +
+        'Generate one at https://expo.dev → Settings → Access Tokens',
+      );
+    }
+    this.expo = new Expo({ accessToken: accessToken || undefined });
+    this.logger.log(`Expo Push SDK initialised (accessToken: ${accessToken ? 'YES' : 'MISSING'})`);
   }
 
  async sendToUser(
@@ -35,15 +44,30 @@ export class PushNotificationsService implements OnModuleInit {
   try {
       if (!userId) return;
       const userStr = userId.toString();
+      this.logger.log(`📨 sendToUser called for user=${userStr}, title="${payload.title}"`);
+
       const user = await this.userModel.findById(userStr).lean().catch(() => null);
 
-      if (!user?.pushTokens?.length) {
-        this.logger.debug(`No push tokens found for user ${userStr}, skipping push notification`);
+      if (!user) {
+        this.logger.warn(`User ${userStr} not found in database — cannot send push`);
         return;
       }
 
+      if (!user?.pushTokens?.length) {
+        this.logger.warn(
+          `🚫 No push tokens for user ${userStr}. ` +
+          `The user must open the app on a real device and grant notification permission first.`,
+        );
+        return;
+      }
+
+      this.logger.log(`Found ${user.pushTokens.length} push token(s) for user ${userStr}: ${
+        user.pushTokens.map((t: any) => `${t.platform}:${t.token.slice(0, 25)}...`).join(', ')
+      }`);
+
       if (user.pushNotifications === false) {
         this.logger.debug(`User ${userStr} has push notifications disabled in preferences`);
+
         return;
       }
 
