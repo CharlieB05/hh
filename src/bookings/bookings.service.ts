@@ -47,7 +47,16 @@ export interface PaginatedBookings {
 export interface AvailabilityResult {
   available: boolean;
   unavailableDates: { from: Date; to: Date }[];  // host-blocked ranges
-  bookedRanges: { checkIn: Date; checkOut: Date }[];  // confirmed bookings
+  bookedRanges: Array<{
+    checkIn: Date;
+    checkOut: Date;
+    status?: string;
+    guests?: number;
+    guestCount?: number;
+    totalPrice?: number;
+    guestName?: string;
+    guest?: { name?: string };
+  }>;
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -634,7 +643,7 @@ export class BookingsService {
       );
 
     // 2. Confirmed / pending bookings in the window (property-wide, no room)
-    const bookedRanges = await this.bookingModel
+    const bookings = await this.bookingModel
       .find({
         propertyId: new Types.ObjectId(propertyId),
         roomId: { $exists: false },  // only whole-property bookings
@@ -642,9 +651,21 @@ export class BookingsService {
         checkIn: { $lt: to },
         checkOut: { $gt: from },
       })
-      .select('checkIn checkOut')
+      .select('checkIn checkOut status guestCount totalPrice guestId')
+      .populate('guestId', 'name')
       .lean()
-      .exec() as { checkIn: Date; checkOut: Date }[];
+      .exec();
+
+    const bookedRanges = bookings.map((b: any) => ({
+      checkIn: b.checkIn,
+      checkOut: b.checkOut,
+      status: b.status,
+      guests: b.guestCount,
+      guestCount: b.guestCount,
+      totalPrice: b.totalPrice,
+      guestName: b.guestId?.name ?? 'Guest',
+      guest: b.guestId ? { name: b.guestId.name } : undefined,
+    }));
 
     const available = hostBlockedRanges.length === 0 && bookedRanges.length === 0;
 

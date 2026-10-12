@@ -204,6 +204,21 @@ let PropertiesController = PropertiesController_1 = class PropertiesController {
     async unblockDates(id, dto, req) {
         return this.propertiesService.unblockDates(id, dto, req.user);
     }
+    async getCalendarSettings(id, req) {
+        return this.propertiesService.getCalendarSettings(id, req.user);
+    }
+    async updateCalendarSettings(id, dto, req) {
+        return this.propertiesService.updateCalendarSettings(id, dto, req.user);
+    }
+    async setCalendarPrices(id, dto, req) {
+        return this.propertiesService.setCalendarPrices(id, dto, req.user);
+    }
+    async addExternalCalendar(id, dto, req) {
+        return this.propertiesService.addExternalCalendar(id, dto, req.user);
+    }
+    async removeExternalCalendar(id, calendarId, req) {
+        return this.propertiesService.removeExternalCalendar(id, calendarId, req.user);
+    }
     async trackTourView(body) {
         if (body?.propertyId) {
             this.propertiesService.trackTourView(body.propertyId).catch(() => { });
@@ -573,6 +588,76 @@ __decorate([
     __metadata("design:paramtypes", [String, property_dto_1.UnblockDatesDto, Object]),
     __metadata("design:returntype", Promise)
 ], PropertiesController.prototype, "unblockDates", null);
+__decorate([
+    (0, common_1.Get)(':id/calendar/settings'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get host calendar pricing, rules, and external sync settings' }),
+    (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Host calendar settings' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], PropertiesController.prototype, "getCalendarSettings", null);
+__decorate([
+    (0, common_1.Put)(':id/calendar/settings'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Update host calendar pricing rules and booking window' }),
+    (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Updated host calendar settings' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, property_dto_1.UpdateCalendarSettingsDto, Object]),
+    __metadata("design:returntype", Promise)
+], PropertiesController.prototype, "updateCalendarSettings", null);
+__decorate([
+    (0, common_1.Put)(':id/calendar/prices'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Set or clear per-night custom price overrides for a date range' }),
+    (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Updated price overrides' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, property_dto_1.SetCalendarPricesDto, Object]),
+    __metadata("design:returntype", Promise)
+], PropertiesController.prototype, "setCalendarPrices", null);
+__decorate([
+    (0, common_1.Post)(':id/calendar/external'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Add external iCal calendar feed' }),
+    (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: 'External calendar added' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, property_dto_1.AddExternalCalendarDto, Object]),
+    __metadata("design:returntype", Promise)
+], PropertiesController.prototype, "addExternalCalendar", null);
+__decorate([
+    (0, common_1.Delete)(':id/calendar/external/:calendarId'),
+    (0, roles_guard_1.Roles)(user_schema_1.UserRole.HOST, user_schema_1.UserRole.AGENT, user_schema_1.UserRole.LANDLORD, user_schema_1.UserRole.ADMIN),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Remove an external iCal calendar feed' }),
+    (0, swagger_1.ApiParam)({ name: 'id', description: 'Property ID' }),
+    (0, swagger_1.ApiParam)({ name: 'calendarId', description: 'Calendar Feed ID' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'External calendar removed' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Param)('calendarId')),
+    __param(2, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, Object]),
+    __metadata("design:returntype", Promise)
+], PropertiesController.prototype, "removeExternalCalendar", null);
 __decorate([
     (0, common_1.Post)('tour/track'),
     (0, roles_guard_1.Public)(),

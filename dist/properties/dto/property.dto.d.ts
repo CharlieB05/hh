@@ -103,4 +103,21 @@ export declare class BlockDatesDto {
 export declare class UnblockDatesDto {
     fromDates: string[];
 }
+export declare class UpdateCalendarSettingsDto {
+    basePrice?: number;
+    weekendPrice?: number | null;
+    minNights?: number;
+    maxNights?: number | null;
+    noticeDays?: number;
+    windowMonths?: number | null;
+}
+export declare class SetCalendarPricesDto {
+    from: string;
+    to: string;
+    price?: number | null;
+}
+export declare class AddExternalCalendarDto {
+    name: string;
+    url: string;
+}
 export {};

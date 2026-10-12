@@ -178,6 +178,16 @@ export declare class Property {
     weeklyDiscountPercent: number;
     monthlyDiscountPercent: number;
     unavailableDates: UnavailableDateRange[];
+    weekendPrice?: number | null;
+    priceOverrides: Record<string, number>;
+    noticeDays: number;
+    windowMonths?: number | null;
+    externalCalendars: Array<{
+        id: string;
+        name: string;
+        url: string;
+        lastSyncedAt?: Date | null;
+    }>;
     shortTermAmenities: ShortTermAmenities;
     isInstantBookable: boolean;
     cancellationPolicy: CancellationPolicy;

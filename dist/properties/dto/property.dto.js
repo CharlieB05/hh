@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UnblockDatesDto = exports.BlockDatesDto = exports.UpdatePropertyDto = exports.CreatePropertyDto = exports.UnavailableDateRangeDto = exports.ShortTermAmenitiesDto = void 0;
+exports.AddExternalCalendarDto = exports.SetCalendarPricesDto = exports.UpdateCalendarSettingsDto = exports.UnblockDatesDto = exports.BlockDatesDto = exports.UpdatePropertyDto = exports.CreatePropertyDto = exports.UnavailableDateRangeDto = exports.ShortTermAmenitiesDto = void 0;
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 const swagger_1 = require("@nestjs/swagger");
@@ -601,4 +601,85 @@ __decorate([
     (0, class_validator_1.IsDateString)({}, { each: true }),
     __metadata("design:type", Array)
 ], UnblockDatesDto.prototype, "fromDates", void 0);
+class UpdateCalendarSettingsDto {
+    basePrice;
+    weekendPrice;
+    minNights;
+    maxNights;
+    noticeDays;
+    windowMonths;
+}
+exports.UpdateCalendarSettingsDto = UpdateCalendarSettingsDto;
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 50000, description: 'Base price per night in XAF' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateCalendarSettingsDto.prototype, "basePrice", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 60000, description: 'Weekend price per night (null = same as base)' }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Object)
+], UpdateCalendarSettingsDto.prototype, "weekendPrice", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 2, description: 'Minimum nights stay' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], UpdateCalendarSettingsDto.prototype, "minNights", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 30, description: 'Maximum nights stay (null = no limit)' }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Object)
+], UpdateCalendarSettingsDto.prototype, "maxNights", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 0, description: 'Advance notice in days before check-in' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], UpdateCalendarSettingsDto.prototype, "noticeDays", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 12, description: 'How far ahead guests can book in months (null = no limit)' }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Object)
+], UpdateCalendarSettingsDto.prototype, "windowMonths", void 0);
+class SetCalendarPricesDto {
+    from;
+    to;
+    price;
+}
+exports.SetCalendarPricesDto = SetCalendarPricesDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '2026-05-01', description: 'Range start (YYYY-MM-DD)' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SetCalendarPricesDto.prototype, "from", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '2026-05-05', description: 'Range end (YYYY-MM-DD)' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SetCalendarPricesDto.prototype, "to", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 45000, description: 'Override price per night (null to remove override)' }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Object)
+], SetCalendarPricesDto.prototype, "price", void 0);
+class AddExternalCalendarDto {
+    name;
+    url;
+}
+exports.AddExternalCalendarDto = AddExternalCalendarDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Airbnb', description: 'Calendar feed name' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], AddExternalCalendarDto.prototype, "name", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'https://airbnb.com/calendar/ical/...', description: 'iCal URL' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], AddExternalCalendarDto.prototype, "url", void 0);
 //# sourceMappingURL=property.dto.js.map

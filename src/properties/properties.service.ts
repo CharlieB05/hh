@@ -27,7 +27,15 @@ import { HistoryService } from '../history/history.service';
 import { ActivityType } from '../history/schemas/history.schema';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
 import { InteractionType, InteractionSource } from '../user-interactions/schemas/user-interaction.schema';
-import { BlockDatesDto, UnblockDatesDto, CreatePropertyDto, UpdatePropertyDto } from './dto/property.dto';
+import {
+  BlockDatesDto,
+  UnblockDatesDto,
+  CreatePropertyDto,
+  UpdatePropertyDto,
+  UpdateCalendarSettingsDto,
+  SetCalendarPricesDto,
+  AddExternalCalendarDto,
+} from './dto/property.dto';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1198,8 +1206,8 @@ export class PropertiesService implements OnModuleInit {
       if (isNaN(from.getTime()) || isNaN(to.getTime())) {
         throw new BadRequestException(`Invalid date range: ${r.from} → ${r.to}`);
       }
-      if (to <= from) {
-        throw new BadRequestException(`"to" must be after "from" in range: ${r.from} → ${r.to}`);
+      if (to < from) {
+        throw new BadRequestException(`"to" must be after or equal to "from" in range: ${r.from} → ${r.to}`);
       }
       return { from, to, reason: r.reason };
     });
@@ -1253,6 +1261,119 @@ export class PropertiesService implements OnModuleInit {
 
     if (!property) throw new NotFoundException('Property not found');
     return { unavailableDates: (property as any).unavailableDates ?? [] };
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // HOST CALENDAR SETTINGS & SYNC
+  // ════════════════════════════════════════════════════════════════════════════
+
+  async getCalendarSettings(propertyId: string, user: User) {
+    if (!Types.ObjectId.isValid(propertyId)) throw new BadRequestException('Invalid property ID');
+    const property = await this.propertyModel.findById(propertyId).exec();
+    if (!property) throw new NotFoundException('Property not found');
+    this.assertCanManage(property, user);
+
+    const baseUrl = process.env.API_URL || process.env.BACKEND_URL || 'https://horohouse.com/api';
+
+    return {
+      basePrice: property.price ?? 0,
+      weekendPrice: property.weekendPrice ?? null,
+      priceOverrides: property.priceOverrides ?? {},
+      minNights: property.minNights ?? 1,
+      maxNights: property.maxNights ?? null,
+      noticeDays: property.noticeDays ?? 0,
+      windowMonths: property.windowMonths ?? 12,
+      externalCalendars: property.externalCalendars ?? [],
+      exportUrl: `${baseUrl}/properties/${propertyId}/calendar.ics`,
+    };
+  }
+
+  async updateCalendarSettings(propertyId: string, dto: UpdateCalendarSettingsDto, user: User) {
+    if (!Types.ObjectId.isValid(propertyId)) throw new BadRequestException('Invalid property ID');
+    const property = await this.propertyModel.findById(propertyId).exec();
+    if (!property) throw new NotFoundException('Property not found');
+    this.assertCanManage(property, user);
+
+    const update: any = {};
+    if (dto.basePrice !== undefined) update.price = dto.basePrice;
+    if (dto.weekendPrice !== undefined) update.weekendPrice = dto.weekendPrice;
+    if (dto.minNights !== undefined) update.minNights = dto.minNights;
+    if (dto.maxNights !== undefined) update.maxNights = dto.maxNights;
+    if (dto.noticeDays !== undefined) update.noticeDays = dto.noticeDays;
+    if (dto.windowMonths !== undefined) update.windowMonths = dto.windowMonths;
+
+    await this.propertyModel.findByIdAndUpdate(propertyId, { $set: update }, { new: true }).exec();
+    return this.getCalendarSettings(propertyId, user);
+  }
+
+  async setCalendarPrices(propertyId: string, dto: SetCalendarPricesDto, user: User) {
+    if (!Types.ObjectId.isValid(propertyId)) throw new BadRequestException('Invalid property ID');
+    const property = await this.propertyModel.findById(propertyId).exec();
+    if (!property) throw new NotFoundException('Property not found');
+    this.assertCanManage(property, user);
+
+    const start = new Date(dto.from);
+    const end = new Date(dto.to);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+      throw new BadRequestException('Invalid date range');
+    }
+
+    const priceOverrides = { ...((property as any).priceOverrides || {}) };
+    const cur = new Date(start);
+    while (cur <= end) {
+      const key = cur.toISOString().split('T')[0];
+      if (dto.price === null || dto.price === undefined) {
+        delete priceOverrides[key];
+      } else {
+        priceOverrides[key] = dto.price;
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    await this.propertyModel.findByIdAndUpdate(
+      propertyId,
+      { $set: { priceOverrides } },
+      { new: true },
+    ).exec();
+
+    return { priceOverrides };
+  }
+
+  async addExternalCalendar(propertyId: string, dto: AddExternalCalendarDto, user: User) {
+    if (!Types.ObjectId.isValid(propertyId)) throw new BadRequestException('Invalid property ID');
+    const property = await this.propertyModel.findById(propertyId).exec();
+    if (!property) throw new NotFoundException('Property not found');
+    this.assertCanManage(property, user);
+
+    const newCalendar = {
+      id: new Types.ObjectId().toString(),
+      name: dto.name,
+      url: dto.url,
+      lastSyncedAt: new Date(),
+    };
+
+    await this.propertyModel.findByIdAndUpdate(
+      propertyId,
+      { $push: { externalCalendars: newCalendar } },
+      { new: true },
+    ).exec();
+
+    return newCalendar;
+  }
+
+  async removeExternalCalendar(propertyId: string, calendarId: string, user: User) {
+    if (!Types.ObjectId.isValid(propertyId)) throw new BadRequestException('Invalid property ID');
+    const property = await this.propertyModel.findById(propertyId).exec();
+    if (!property) throw new NotFoundException('Property not found');
+    this.assertCanManage(property, user);
+
+    await this.propertyModel.findByIdAndUpdate(
+      propertyId,
+      { $pull: { externalCalendars: { id: calendarId } } },
+      { new: true },
+    ).exec();
+
+    return { success: true };
   }
 
   async getShortTermById(propertyId: string): Promise<any> {

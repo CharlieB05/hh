@@ -1,6 +1,6 @@
 import { FastifyRequest } from 'fastify';
 import { PropertiesService } from './properties.service';
-import { CreatePropertyDto, UpdatePropertyDto, BlockDatesDto, UnblockDatesDto } from './dto/property.dto';
+import { CreatePropertyDto, UpdatePropertyDto, BlockDatesDto, UnblockDatesDto, UpdateCalendarSettingsDto, SetCalendarPricesDto, AddExternalCalendarDto } from './dto/property.dto';
 import { User } from '../users/schemas/user.schema';
 export declare class PropertiesController {
     private readonly propertiesService;
@@ -71,6 +71,60 @@ export declare class PropertiesController {
     unblockDates(id: string, dto: UnblockDatesDto, req: FastifyRequest & {
         user: User;
     }): Promise<import("./schemas/property.schema").Property>;
+    getCalendarSettings(id: string, req: FastifyRequest & {
+        user: User;
+    }): Promise<{
+        basePrice: number;
+        weekendPrice: number | null;
+        priceOverrides: Record<string, number>;
+        minNights: number;
+        maxNights: number;
+        noticeDays: number;
+        windowMonths: number;
+        externalCalendars: {
+            id: string;
+            name: string;
+            url: string;
+            lastSyncedAt?: Date | null;
+        }[];
+        exportUrl: string;
+    }>;
+    updateCalendarSettings(id: string, dto: UpdateCalendarSettingsDto, req: FastifyRequest & {
+        user: User;
+    }): Promise<{
+        basePrice: number;
+        weekendPrice: number | null;
+        priceOverrides: Record<string, number>;
+        minNights: number;
+        maxNights: number;
+        noticeDays: number;
+        windowMonths: number;
+        externalCalendars: {
+            id: string;
+            name: string;
+            url: string;
+            lastSyncedAt?: Date | null;
+        }[];
+        exportUrl: string;
+    }>;
+    setCalendarPrices(id: string, dto: SetCalendarPricesDto, req: FastifyRequest & {
+        user: User;
+    }): Promise<{
+        priceOverrides: any;
+    }>;
+    addExternalCalendar(id: string, dto: AddExternalCalendarDto, req: FastifyRequest & {
+        user: User;
+    }): Promise<{
+        id: string;
+        name: string;
+        url: string;
+        lastSyncedAt: Date;
+    }>;
+    removeExternalCalendar(id: string, calendarId: string, req: FastifyRequest & {
+        user: User;
+    }): Promise<{
+        success: boolean;
+    }>;
     trackTourView(body: {
         propertyId: string;
     }): Promise<void>;

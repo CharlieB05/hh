@@ -121,6 +121,11 @@ let Property = class Property {
     weeklyDiscountPercent;
     monthlyDiscountPercent;
     unavailableDates;
+    weekendPrice;
+    priceOverrides;
+    noticeDays;
+    windowMonths;
+    externalCalendars;
     shortTermAmenities;
     isInstantBookable;
     cancellationPolicy;
@@ -289,6 +294,36 @@ __decorate([
     }),
     __metadata("design:type", Array)
 ], Property.prototype, "unavailableDates", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Number, default: null }),
+    __metadata("design:type", Object)
+], Property.prototype, "weekendPrice", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Object, default: {} }),
+    __metadata("design:type", Object)
+], Property.prototype, "priceOverrides", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: 0, min: 0 }),
+    __metadata("design:type", Number)
+], Property.prototype, "noticeDays", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: Number, default: 12 }),
+    __metadata("design:type", Object)
+], Property.prototype, "windowMonths", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        type: [
+            {
+                id: { type: String, required: true },
+                name: { type: String, required: true },
+                url: { type: String, required: true },
+                lastSyncedAt: { type: Date, default: null },
+            },
+        ],
+        default: [],
+    }),
+    __metadata("design:type", Array)
+], Property.prototype, "externalCalendars", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: Object, default: {} }),
     __metadata("design:type", Object)

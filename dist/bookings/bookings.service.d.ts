@@ -18,10 +18,18 @@ export interface AvailabilityResult {
         from: Date;
         to: Date;
     }[];
-    bookedRanges: {
+    bookedRanges: Array<{
         checkIn: Date;
         checkOut: Date;
-    }[];
+        status?: string;
+        guests?: number;
+        guestCount?: number;
+        totalPrice?: number;
+        guestName?: string;
+        guest?: {
+            name?: string;
+        };
+    }>;
 }
 export declare class BookingsService {
     private bookingModel;

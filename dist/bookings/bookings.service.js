@@ -413,7 +413,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
             };
         }
         const hostBlockedRanges = (property.unavailableDates ?? []).filter((r) => r.from < to && r.to > from);
-        const bookedRanges = await this.bookingModel
+        const bookings = await this.bookingModel
             .find({
             propertyId: new mongoose_2.Types.ObjectId(propertyId),
             roomId: { $exists: false },
@@ -421,9 +421,20 @@ let BookingsService = BookingsService_1 = class BookingsService {
             checkIn: { $lt: to },
             checkOut: { $gt: from },
         })
-            .select('checkIn checkOut')
+            .select('checkIn checkOut status guestCount totalPrice guestId')
+            .populate('guestId', 'name')
             .lean()
             .exec();
+        const bookedRanges = bookings.map((b) => ({
+            checkIn: b.checkIn,
+            checkOut: b.checkOut,
+            status: b.status,
+            guests: b.guestCount,
+            guestCount: b.guestCount,
+            totalPrice: b.totalPrice,
+            guestName: b.guestId?.name ?? 'Guest',
+            guest: b.guestId ? { name: b.guestId.name } : undefined,
+        }));
         const available = hostBlockedRanges.length === 0 && bookedRanges.length === 0;
         return { available, unavailableDates: hostBlockedRanges, bookedRanges };
     }

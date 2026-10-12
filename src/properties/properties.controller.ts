@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Patch,
   Param,
@@ -20,7 +21,15 @@ import { MultipartFile } from '@fastify/multipart';
 // Fastify multipart provides files on request via parts()
 
 import { PropertiesService, PropertySearchFilters, PropertySearchOptions } from './properties.service';
-import { CreatePropertyDto, UpdatePropertyDto, BlockDatesDto, UnblockDatesDto } from './dto/property.dto';
+import {
+  CreatePropertyDto,
+  UpdatePropertyDto,
+  BlockDatesDto,
+  UnblockDatesDto,
+  UpdateCalendarSettingsDto,
+  SetCalendarPricesDto,
+  AddExternalCalendarDto,
+} from './dto/property.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt.auth.guard';
 import { RolesGuard, Roles, Public } from '../auth/guards/roles.guard';
 import { User, UserRole } from '../users/schemas/user.schema';
@@ -430,6 +439,78 @@ export class PropertiesController {
     @Req() req: FastifyRequest & { user: User },
   ) {
     return this.propertiesService.unblockDates(id, dto, req.user);
+  }
+
+  // ══ 6. Host Calendar Settings ═════════════════════════════════════════════════
+
+  @Get(':id/calendar/settings')
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get host calendar pricing, rules, and external sync settings' })
+  @ApiParam({ name: 'id', description: 'Property ID' })
+  @ApiResponse({ status: 200, description: 'Host calendar settings' })
+  async getCalendarSettings(
+    @Param('id') id: string,
+    @Req() req: FastifyRequest & { user: User },
+  ) {
+    return this.propertiesService.getCalendarSettings(id, req.user);
+  }
+
+  @Put(':id/calendar/settings')
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update host calendar pricing rules and booking window' })
+  @ApiParam({ name: 'id', description: 'Property ID' })
+  @ApiResponse({ status: 200, description: 'Updated host calendar settings' })
+  async updateCalendarSettings(
+    @Param('id') id: string,
+    @Body() dto: UpdateCalendarSettingsDto,
+    @Req() req: FastifyRequest & { user: User },
+  ) {
+    return this.propertiesService.updateCalendarSettings(id, dto, req.user);
+  }
+
+  @Put(':id/calendar/prices')
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set or clear per-night custom price overrides for a date range' })
+  @ApiParam({ name: 'id', description: 'Property ID' })
+  @ApiResponse({ status: 200, description: 'Updated price overrides' })
+  async setCalendarPrices(
+    @Param('id') id: string,
+    @Body() dto: SetCalendarPricesDto,
+    @Req() req: FastifyRequest & { user: User },
+  ) {
+    return this.propertiesService.setCalendarPrices(id, dto, req.user);
+  }
+
+  @Post(':id/calendar/external')
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Add external iCal calendar feed' })
+  @ApiParam({ name: 'id', description: 'Property ID' })
+  @ApiResponse({ status: 201, description: 'External calendar added' })
+  async addExternalCalendar(
+    @Param('id') id: string,
+    @Body() dto: AddExternalCalendarDto,
+    @Req() req: FastifyRequest & { user: User },
+  ) {
+    return this.propertiesService.addExternalCalendar(id, dto, req.user);
+  }
+
+  @Delete(':id/calendar/external/:calendarId')
+  @Roles(UserRole.HOST, UserRole.AGENT, UserRole.LANDLORD, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove an external iCal calendar feed' })
+  @ApiParam({ name: 'id', description: 'Property ID' })
+  @ApiParam({ name: 'calendarId', description: 'Calendar Feed ID' })
+  @ApiResponse({ status: 200, description: 'External calendar removed' })
+  async removeExternalCalendar(
+    @Param('id') id: string,
+    @Param('calendarId') calendarId: string,
+    @Req() req: FastifyRequest & { user: User },
+  ) {
+    return this.propertiesService.removeExternalCalendar(id, calendarId, req.user);
   }
 
   @Post('tour/track')

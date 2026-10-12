@@ -407,3 +407,61 @@ export class UnblockDatesDto {
   @IsDateString({}, { each: true })
   fromDates: string[];
 }
+
+// ─── Host Calendar Settings & Sync ──────────────────────────────────────────
+
+export class UpdateCalendarSettingsDto {
+  @ApiPropertyOptional({ example: 50000, description: 'Base price per night in XAF' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  basePrice?: number;
+
+  @ApiPropertyOptional({ example: 60000, description: 'Weekend price per night (null = same as base)' })
+  @IsOptional()
+  weekendPrice?: number | null;
+
+  @ApiPropertyOptional({ example: 2, description: 'Minimum nights stay' })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  minNights?: number;
+
+  @ApiPropertyOptional({ example: 30, description: 'Maximum nights stay (null = no limit)' })
+  @IsOptional()
+  maxNights?: number | null;
+
+  @ApiPropertyOptional({ example: 0, description: 'Advance notice in days before check-in' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  noticeDays?: number;
+
+  @ApiPropertyOptional({ example: 12, description: 'How far ahead guests can book in months (null = no limit)' })
+  @IsOptional()
+  windowMonths?: number | null;
+}
+
+export class SetCalendarPricesDto {
+  @ApiProperty({ example: '2026-05-01', description: 'Range start (YYYY-MM-DD)' })
+  @IsString()
+  from: string;
+
+  @ApiProperty({ example: '2026-05-05', description: 'Range end (YYYY-MM-DD)' })
+  @IsString()
+  to: string;
+
+  @ApiPropertyOptional({ example: 45000, description: 'Override price per night (null to remove override)' })
+  @IsOptional()
+  price?: number | null;
+}
+
+export class AddExternalCalendarDto {
+  @ApiProperty({ example: 'Airbnb', description: 'Calendar feed name' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: 'https://airbnb.com/calendar/ical/...', description: 'iCal URL' })
+  @IsString()
+  url: string;
+}

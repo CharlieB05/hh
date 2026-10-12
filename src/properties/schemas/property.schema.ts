@@ -340,6 +340,38 @@ export class Property {
   })
   unavailableDates: UnavailableDateRange[];
 
+  // ── Calendar settings (host pricing & sync) ───────────────────────────────
+
+  @Prop({ type: Number, default: null })
+  weekendPrice?: number | null;
+
+  @Prop({ type: Object, default: {} })
+  priceOverrides: Record<string, number>;
+
+  @Prop({ default: 0, min: 0 })
+  noticeDays: number;
+
+  @Prop({ type: Number, default: 12 })
+  windowMonths?: number | null;
+
+  @Prop({
+    type: [
+      {
+        id: { type: String, required: true },
+        name: { type: String, required: true },
+        url: { type: String, required: true },
+        lastSyncedAt: { type: Date, default: null },
+      },
+    ],
+    default: [],
+  })
+  externalCalendars: Array<{
+    id: string;
+    name: string;
+    url: string;
+    lastSyncedAt?: Date | null;
+  }>;
+
   @Prop({ type: Object, default: {} })
   shortTermAmenities: ShortTermAmenities;
 

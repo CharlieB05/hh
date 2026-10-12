@@ -5,7 +5,7 @@ import { Property, PropertyDocument, PropertyType, ApprovalStatus, ListingType, 
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { HistoryService } from '../history/history.service';
 import { UserInteractionsService } from '../user-interactions/user-interactions.service';
-import { BlockDatesDto, UnblockDatesDto, CreatePropertyDto, UpdatePropertyDto } from './dto/property.dto';
+import { BlockDatesDto, UnblockDatesDto, CreatePropertyDto, UpdatePropertyDto, UpdateCalendarSettingsDto, SetCalendarPricesDto, AddExternalCalendarDto } from './dto/property.dto';
 export interface PropertySearchFilters {
     minPrice?: number;
     maxPrice?: number;
@@ -162,6 +162,50 @@ export declare class PropertiesService implements OnModuleInit {
     unblockDates(propertyId: string, dto: UnblockDatesDto, user: User): Promise<Property>;
     getBlockedDates(propertyId: string): Promise<{
         unavailableDates: any[];
+    }>;
+    getCalendarSettings(propertyId: string, user: User): Promise<{
+        basePrice: number;
+        weekendPrice: number | null;
+        priceOverrides: Record<string, number>;
+        minNights: number;
+        maxNights: number;
+        noticeDays: number;
+        windowMonths: number;
+        externalCalendars: {
+            id: string;
+            name: string;
+            url: string;
+            lastSyncedAt?: Date | null;
+        }[];
+        exportUrl: string;
+    }>;
+    updateCalendarSettings(propertyId: string, dto: UpdateCalendarSettingsDto, user: User): Promise<{
+        basePrice: number;
+        weekendPrice: number | null;
+        priceOverrides: Record<string, number>;
+        minNights: number;
+        maxNights: number;
+        noticeDays: number;
+        windowMonths: number;
+        externalCalendars: {
+            id: string;
+            name: string;
+            url: string;
+            lastSyncedAt?: Date | null;
+        }[];
+        exportUrl: string;
+    }>;
+    setCalendarPrices(propertyId: string, dto: SetCalendarPricesDto, user: User): Promise<{
+        priceOverrides: any;
+    }>;
+    addExternalCalendar(propertyId: string, dto: AddExternalCalendarDto, user: User): Promise<{
+        id: string;
+        name: string;
+        url: string;
+        lastSyncedAt: Date;
+    }>;
+    removeExternalCalendar(propertyId: string, calendarId: string, user: User): Promise<{
+        success: boolean;
     }>;
     getShortTermById(propertyId: string): Promise<any>;
     trackTourView(propertyId: string): Promise<void>;
