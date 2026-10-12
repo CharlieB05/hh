@@ -22,7 +22,9 @@ const roles_guard_1 = require("./guards/roles.guard");
 const jwt_auth_guard_1 = require("./guards/jwt.auth.guard");
 const user_schema_1 = require("../users/schemas/user.schema");
 const google_oauth_guard_1 = require("./guards/google-oauth.guard");
+const onboarding_guard_1 = require("./guards/onboarding.guard");
 const password_reset_dto_1 = require("./dto/password-reset.dto");
+const google_onboarding_dto_1 = require("./dto/google-onboarding.dto");
 class SendPhoneCodeRequestDto {
     phoneNumber;
 }
@@ -247,12 +249,18 @@ let AuthController = class AuthController {
             }, req);
             this.setAuthCookies(res, authResult);
             let redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const params = new URLSearchParams({
+                token: authResult.accessToken,
+                refresh: authResult.refreshToken,
+                ...(authResult.isNewUser ? { isNewUser: 'true' } : {}),
+                ...(authResult.onboardingStatus ? { onboardingStatus: authResult.onboardingStatus } : {}),
+            });
             if (state && (state.startsWith('exp://') || state.startsWith('horohouse://') || state.startsWith('http'))) {
                 const separator = state.includes('?') ? '&' : '?';
-                redirectUrl = `${state}${separator}token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+                redirectUrl = `${state}${separator}${params.toString()}`;
             }
             else {
-                redirectUrl = `${redirectUrl}/auth/callback?token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+                redirectUrl = `${redirectUrl}/auth/callback?${params.toString()}`;
             }
             res.redirect(redirectUrl, 302);
             return res;
@@ -319,6 +327,8 @@ let AuthController = class AuthController {
                     phoneVerified: req.user.phoneVerified || false,
                     googleId: req.user.googleId,
                     hasPassword: !!req.user.hasPassword,
+                    onboardingCompleted: req.user.onboardingCompleted ?? false,
+                    onboardingStatus: req.user.onboardingStatus || 'completed',
                 },
             };
         }
@@ -368,6 +378,24 @@ let AuthController = class AuthController {
     async disconnectGoogle(req) {
         const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
         return this.authService.disconnectGoogle(userId);
+    }
+    async getOnboardingStatus(req) {
+        const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+        return this.authService.getGoogleOnboardingStatus(userId);
+    }
+    async selectOnboardingRole(dto, req) {
+        const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+        return this.authService.selectOnboardingRole(userId, dto.role);
+    }
+    async setOnboardingPhone(dto, req) {
+        const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+        return this.authService.setOnboardingPhone(userId, dto.phoneNumber);
+    }
+    async completeOnboarding(req, res) {
+        const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+        const result = await this.authService.completeGoogleOnboarding(userId);
+        this.setAuthCookies(res, result);
+        return result;
     }
 };
 exports.AuthController = AuthController;
@@ -551,6 +579,7 @@ __decorate([
 ], AuthController.prototype, "logout", null);
 __decorate([
     (0, common_1.Get)('profile'),
+    (0, onboarding_guard_1.AllowIncompleteOnboarding)(),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Get current user profile' }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'User profile retrieved' }),
@@ -562,6 +591,7 @@ __decorate([
 ], AuthController.prototype, "getProfile", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, onboarding_guard_1.AllowIncompleteOnboarding)(),
     (0, common_1.Get)('verify-token'),
     (0, swagger_1.ApiBearerAuth)(),
     (0, swagger_1.ApiOperation)({ summary: 'Verify if current token is valid' }),
@@ -690,6 +720,66 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "disconnectGoogle", null);
+__decorate([
+    (0, common_1.Get)('onboarding/status'),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, onboarding_guard_1.AllowIncompleteOnboarding)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Get Google onboarding status for the current user' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Onboarding status retrieved successfully' }),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "getOnboardingStatus", null);
+__decorate([
+    (0, common_1.Post)('onboarding/select-role'),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, onboarding_guard_1.AllowIncompleteOnboarding)(),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: 'Step 1: Select role during Google onboarding' }),
+    (0, swagger_1.ApiBody)({ type: google_onboarding_dto_1.SelectRoleDto }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Role selected successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid role or onboarding already completed' }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [google_onboarding_dto_1.SelectRoleDto, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "selectOnboardingRole", null);
+__decorate([
+    (0, common_1.Post)('onboarding/set-phone'),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, onboarding_guard_1.AllowIncompleteOnboarding)(),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: 'Step 2: Set phone number during Google onboarding' }),
+    (0, swagger_1.ApiBody)({ type: google_onboarding_dto_1.SetPhoneDto }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Phone number set successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid phone number or wrong onboarding step' }),
+    (0, swagger_1.ApiResponse)({ status: 409, description: 'Phone number already registered' }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [google_onboarding_dto_1.SetPhoneDto, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "setOnboardingPhone", null);
+__decorate([
+    (0, common_1.Post)('onboarding/complete'),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, onboarding_guard_1.AllowIncompleteOnboarding)(),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, swagger_1.ApiOperation)({ summary: 'Step 3: Complete Google onboarding' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Onboarding completed successfully' }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: 'Missing required fields or already completed' }),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "completeOnboarding", null);
 exports.AuthController = AuthController = __decorate([
     (0, swagger_1.ApiTags)('Authentication'),
     (0, common_1.Controller)('auth'),

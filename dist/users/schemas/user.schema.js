@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserSchema = exports.User = exports.StudentVerificationStatus = exports.PayoutMethod = exports.HostVerificationStatus = exports.UserRole = void 0;
+exports.UserSchema = exports.User = exports.StudentVerificationStatus = exports.PayoutMethod = exports.HostVerificationStatus = exports.OnboardingStatus = exports.UserRole = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 var UserRole;
@@ -22,6 +22,13 @@ var UserRole;
     UserRole["GUEST"] = "guest";
     UserRole["STUDENT"] = "student";
 })(UserRole || (exports.UserRole = UserRole = {}));
+var OnboardingStatus;
+(function (OnboardingStatus) {
+    OnboardingStatus["NOT_STARTED"] = "not_started";
+    OnboardingStatus["ROLE_SELECTED"] = "role_selected";
+    OnboardingStatus["PHONE_PROVIDED"] = "phone_provided";
+    OnboardingStatus["COMPLETED"] = "completed";
+})(OnboardingStatus || (exports.OnboardingStatus = OnboardingStatus = {}));
 var HostVerificationStatus;
 (function (HostVerificationStatus) {
     HostVerificationStatus["UNVERIFIED"] = "unverified";
@@ -91,6 +98,7 @@ let User = class User {
     city;
     country;
     onboardingCompleted;
+    onboardingStatus;
     agentPreferences;
     createdAt;
     updatedAt;
@@ -444,6 +452,14 @@ __decorate([
     (0, mongoose_1.Prop)({ default: false }),
     __metadata("design:type", Boolean)
 ], User.prototype, "onboardingCompleted", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        type: String,
+        enum: Object.values(OnboardingStatus),
+        default: OnboardingStatus.COMPLETED,
+    }),
+    __metadata("design:type", String)
+], User.prototype, "onboardingStatus", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: Object, default: null }),
     __metadata("design:type", Object)

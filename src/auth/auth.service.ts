@@ -15,7 +15,7 @@ import * as crypto from 'crypto';
 
 import { SmsService } from './sms.service';
 import { EmailService } from '../email/email.service';
-import { User, UserDocument, UserRole, UserSession } from '../users/schemas/user.schema';
+import { User, UserDocument, UserRole, UserSession, OnboardingStatus } from '../users/schemas/user.schema';
 
 export interface JwtPayload {
   sub: string;
@@ -23,6 +23,8 @@ export interface JwtPayload {
   email?: string;
   role: UserRole;
   sessionId: string; // Add sessionId to JWT payload
+  onboardingStatus?: OnboardingStatus;
+  onboardingCompleted?: boolean;
   iat?: number;
   exp?: number;
 }
@@ -31,6 +33,8 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   user: Partial<User>;
+  isNewUser?: boolean;
+  onboardingStatus?: string;
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
@@ -387,38 +391,58 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
     try {
       const { googleId, email, name, picture } = dto;
 
-      // Find existing user
+      // Find existing user by googleId first, then by email
       let user = await this.userModel.findOne({
         $or: [{ googleId }, { email }]
       });
 
+      let isNewUser = false;
+
       if (!user) {
-        // Create new user
+        // Create new user — onboarding is NOT_STARTED
+        isNewUser = true;
         user = await this.userModel.create({
           googleId,
           name,
           email,
           profilePicture: picture,
-          phoneNumber: `google_${Date.now()}`, // Temporary phone number
-          role: UserRole.REGISTERED_USER,
+          phoneNumber: `google_${Date.now()}`, // Temporary placeholder
+          role: UserRole.REGISTERED_USER,       // Temporary — will be replaced during onboarding
           emailVerified: true,
           phoneVerified: false,
+          onboardingCompleted: false,
+          onboardingStatus: OnboardingStatus.NOT_STARTED,
         });
 
         this.logger.log(`New user created via Google OAuth: ${email}`);
 
-        // Send verification email (Google users are already email verified, but we can still send welcome)
+        // Send welcome email
         if (user.email) {
           void this.emailService.sendWelcomeEmail(user.email, user.name).catch(() => undefined);
         }
       } else {
-        // Update existing user
+        // Existing user — link Google if not already linked, but NEVER overwrite role/phone
         if (!user.googleId) user.googleId = googleId;
         if (!user.profilePicture && picture) user.profilePicture = picture;
         user.emailVerified = true;
+
+        // Check if existing user has incomplete onboarding (e.g. placeholder phone or not marked completed)
+        const hasPlaceholderPhone =
+          !user.phoneNumber ||
+          user.phoneNumber.startsWith('google_') ||
+          user.phoneNumber.startsWith('temp_');
+
+        if (hasPlaceholderPhone || user.onboardingCompleted === false || (user.onboardingStatus && user.onboardingStatus !== OnboardingStatus.COMPLETED)) {
+          if (!user.onboardingStatus || user.onboardingStatus === OnboardingStatus.COMPLETED) {
+            user.onboardingStatus = OnboardingStatus.NOT_STARTED;
+          }
+          user.onboardingCompleted = false;
+          isNewUser = true; // Signal to clients that onboarding is required
+        }
+
         await user.save();
 
-        this.logger.log(`Existing user logged in via Google OAuth: ${email}`);
+        this.logger.log(`Existing user logged in via Google OAuth: ${email}, onboardingStatus: ${user.onboardingStatus}`);
       }
 
       const tokens = await this.generateTokens(user, req);
@@ -426,6 +450,8 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
       return {
         ...tokens,
         user: user.toJSON(),
+        isNewUser,
+        onboardingStatus: user.onboardingStatus,
       };
     } catch (error) {
       this.logger.error('Google OAuth failed:', error);
@@ -1224,5 +1250,168 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
       this.logger.error('Google disconnect failed:', error);
       throw error;
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Google Onboarding — 3-step flow: role → phone → complete
+  // ══════════════════════════════════════════════════════════════════════════
+
+  private static readonly ONBOARDING_SELF_ASSIGNABLE_ROLES: UserRole[] = [
+    UserRole.REGISTERED_USER,
+    UserRole.HOST,
+    UserRole.LANDLORD,
+    UserRole.AGENT,
+  ];
+
+  /**
+   * Get onboarding status for the current user.
+   */
+  async getGoogleOnboardingStatus(userId: string): Promise<{
+    onboardingStatus: OnboardingStatus;
+    role: UserRole;
+    phoneNumber: string | null;
+    name: string;
+    email: string | null;
+    profilePicture: string | null;
+  }> {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const hasRealPhone = user.phoneNumber && !user.phoneNumber.startsWith('google_') && !user.phoneNumber.startsWith('temp_');
+
+    return {
+      onboardingStatus: user.onboardingStatus,
+      role: user.role,
+      phoneNumber: hasRealPhone ? user.phoneNumber : null,
+      name: user.name,
+      email: user.email || null,
+      profilePicture: user.profilePicture || null,
+    };
+  }
+
+  /**
+   * Step 1: Select role during Google onboarding.
+   */
+  async selectOnboardingRole(userId: string, role: UserRole): Promise<{ onboardingStatus: OnboardingStatus; role: UserRole }> {
+    if (!AuthService.ONBOARDING_SELF_ASSIGNABLE_ROLES.includes(role)) {
+      throw new BadRequestException(
+        `Invalid role. Allowed roles: ${AuthService.ONBOARDING_SELF_ASSIGNABLE_ROLES.join(', ')}`,
+      );
+    }
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Only allow role selection if onboarding is not yet completed
+    if (user.onboardingStatus === OnboardingStatus.COMPLETED) {
+      throw new BadRequestException('Onboarding is already completed. Role cannot be changed here.');
+    }
+
+    user.role = role;
+    user.onboardingStatus = OnboardingStatus.ROLE_SELECTED;
+    await user.save();
+
+    this.logger.log(`Onboarding role selected for user ${userId}: ${role}`);
+
+    return {
+      onboardingStatus: user.onboardingStatus,
+      role: user.role,
+    };
+  }
+
+  /**
+   * Step 2: Set phone number during Google onboarding.
+   */
+  async setOnboardingPhone(userId: string, phoneNumber: string): Promise<{ onboardingStatus: OnboardingStatus; phoneNumber: string }> {
+    // Validate E.164 format
+    if (!this.smsService.isValidPhoneNumber(phoneNumber)) {
+      throw new BadRequestException('Invalid phone number format. Use E.164 format (e.g. +237612345678).');
+    }
+
+    const formattedPhone = this.smsService.formatPhoneNumber(phoneNumber);
+
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Only allow phone setting if onboarding is not completed
+    if (user.onboardingStatus === OnboardingStatus.COMPLETED) {
+      throw new BadRequestException('Onboarding is already completed.');
+    }
+
+    // Must have selected a role first
+    if (user.onboardingStatus === OnboardingStatus.NOT_STARTED) {
+      throw new BadRequestException('Please select a role before providing a phone number.');
+    }
+
+    // Check for duplicate phone numbers (excluding temp placeholders and the user themselves)
+    const existingUser = await this.userModel.findOne({
+      _id: { $ne: user._id },
+      phoneNumber: formattedPhone,
+    });
+
+    if (existingUser) {
+      throw new ConflictException('This phone number is already registered to another account.');
+    }
+
+    user.phoneNumber = formattedPhone;
+    user.phoneVerified = false; // Explicitly unverified — no OTP at this stage
+    user.onboardingStatus = OnboardingStatus.PHONE_PROVIDED;
+    await user.save();
+
+    this.logger.log(`Onboarding phone set for user ${userId}: ${formattedPhone}`);
+
+    return {
+      onboardingStatus: user.onboardingStatus,
+      phoneNumber: formattedPhone,
+    };
+  }
+
+  /**
+   * Step 3: Complete onboarding.
+   * Validates that role and phone are properly set before marking complete.
+   */
+  async completeGoogleOnboarding(userId: string): Promise<AuthTokens> {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.onboardingStatus === OnboardingStatus.COMPLETED) {
+      throw new BadRequestException('Onboarding is already completed.');
+    }
+
+    // Validate that all required fields are set
+    const hasValidRole = AuthService.ONBOARDING_SELF_ASSIGNABLE_ROLES.includes(user.role);
+    const hasRealPhone = user.phoneNumber && !user.phoneNumber.startsWith('google_') && !user.phoneNumber.startsWith('temp_');
+
+    if (!hasValidRole) {
+      throw new BadRequestException('Please select a valid role before completing onboarding.');
+    }
+
+    if (!hasRealPhone) {
+      throw new BadRequestException('Please provide a valid phone number before completing onboarding.');
+    }
+
+    // Mark onboarding as complete
+    user.onboardingStatus = OnboardingStatus.COMPLETED;
+    user.onboardingCompleted = true;
+    await user.save();
+
+    this.logger.log(`Google onboarding completed for user ${userId}`);
+
+    // Generate fresh tokens so the JWT carries the updated role
+    const tokens = await this.generateTokens(user);
+
+    return {
+      ...tokens,
+      user: user.toJSON(),
+      onboardingStatus: OnboardingStatus.COMPLETED,
+    };
   }
 }

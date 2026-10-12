@@ -9,6 +9,12 @@ export declare enum UserRole {
     GUEST = "guest",
     STUDENT = "student"
 }
+export declare enum OnboardingStatus {
+    NOT_STARTED = "not_started",
+    ROLE_SELECTED = "role_selected",
+    PHONE_PROVIDED = "phone_provided",
+    COMPLETED = "completed"
+}
 export declare enum HostVerificationStatus {
     UNVERIFIED = "unverified",
     PENDING = "pending",
@@ -223,6 +229,7 @@ export declare class User {
     city?: string;
     country?: string;
     onboardingCompleted?: boolean;
+    onboardingStatus: OnboardingStatus;
     agentPreferences?: AgentPreferences;
     createdAt: Date;
     updatedAt: Date;

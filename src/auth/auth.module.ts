@@ -15,6 +15,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 // Guards
 import { RolesGuard } from './guards/roles.guard';
 import { JwtAuthGuard } from './guards/jwt.auth.guard';
+import { OnboardingGuard } from './guards/onboarding.guard';
 
 // Schemas
 import { User, UserSchema } from '../users/schemas/user.schema';
@@ -63,7 +64,8 @@ import { EmailModule } from '../email/email.module';
     GoogleStrategy,
     RolesGuard,
     JwtAuthGuard,
+    OnboardingGuard,
   ],
-  exports: [AuthService, SmsService, JwtAuthGuard, RolesGuard],
+  exports: [AuthService, SmsService, JwtAuthGuard, RolesGuard, OnboardingGuard],
 })
 export class AuthModule {}

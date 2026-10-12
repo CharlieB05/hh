@@ -3,13 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { Model } from 'mongoose';
 import { SmsService } from './sms.service';
 import { EmailService } from '../email/email.service';
-import { User, UserDocument, UserRole, UserSession } from '../users/schemas/user.schema';
+import { User, UserDocument, UserRole, UserSession, OnboardingStatus } from '../users/schemas/user.schema';
 export interface JwtPayload {
     sub: string;
     phoneNumber: string;
     email?: string;
     role: UserRole;
     sessionId: string;
+    onboardingStatus?: OnboardingStatus;
+    onboardingCompleted?: boolean;
     iat?: number;
     exp?: number;
 }
@@ -17,6 +19,8 @@ export interface AuthTokens {
     accessToken: string;
     refreshToken: string;
     user: Partial<User>;
+    isNewUser?: boolean;
+    onboardingStatus?: string;
 }
 export interface RegisterWithPhoneDto {
     name: string;
@@ -129,4 +133,22 @@ export declare class AuthService {
     disconnectGoogle(userId: string): Promise<{
         message: string;
     }>;
+    private static readonly ONBOARDING_SELF_ASSIGNABLE_ROLES;
+    getGoogleOnboardingStatus(userId: string): Promise<{
+        onboardingStatus: OnboardingStatus;
+        role: UserRole;
+        phoneNumber: string | null;
+        name: string;
+        email: string | null;
+        profilePicture: string | null;
+    }>;
+    selectOnboardingRole(userId: string, role: UserRole): Promise<{
+        onboardingStatus: OnboardingStatus;
+        role: UserRole;
+    }>;
+    setOnboardingPhone(userId: string, phoneNumber: string): Promise<{
+        onboardingStatus: OnboardingStatus;
+        phoneNumber: string;
+    }>;
+    completeGoogleOnboarding(userId: string): Promise<AuthTokens>;
 }

@@ -62,6 +62,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         preferences: user.preferences,
         agentPreferences: user.agentPreferences,
         onboardingCompleted: user.onboardingCompleted,
+        onboardingStatus: user.onboardingStatus,
         licenseNumber: user.licenseNumber,
         agency: user.agency,
         googleId: user.googleId,            // Social connection status

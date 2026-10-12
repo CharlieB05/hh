@@ -19,6 +19,7 @@ const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const google_strategy_1 = require("./strategies/google.strategy");
 const roles_guard_1 = require("./guards/roles.guard");
 const jwt_auth_guard_1 = require("./guards/jwt.auth.guard");
+const onboarding_guard_1 = require("./guards/onboarding.guard");
 const user_schema_1 = require("../users/schemas/user.schema");
 const email_module_1 = require("../email/email.module");
 let AuthModule = class AuthModule {
@@ -68,8 +69,9 @@ exports.AuthModule = AuthModule = __decorate([
             google_strategy_1.GoogleStrategy,
             roles_guard_1.RolesGuard,
             jwt_auth_guard_1.JwtAuthGuard,
+            onboarding_guard_1.OnboardingGuard,
         ],
-        exports: [auth_service_1.AuthService, sms_service_1.SmsService, jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard],
+        exports: [auth_service_1.AuthService, sms_service_1.SmsService, jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard, onboarding_guard_1.OnboardingGuard],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

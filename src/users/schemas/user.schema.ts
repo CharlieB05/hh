@@ -24,6 +24,22 @@ export enum UserRole {
   STUDENT = 'student',
 }
 
+/**
+ * Tracks Google-OAuth onboarding progress.
+ * Users who register via email/password go through a different flow and
+ * have this set to 'completed' immediately.
+ */
+export enum OnboardingStatus {
+  /** Account created but no profile info collected yet. */
+  NOT_STARTED = 'not_started',
+  /** User has selected a role but still needs to provide a phone number. */
+  ROLE_SELECTED = 'role_selected',
+  /** Role + phone collected; awaiting final review/confirmation. */
+  PHONE_PROVIDED = 'phone_provided',
+  /** All required onboarding steps finished. */
+  COMPLETED = 'completed',
+}
+
 // ─── Host profile ─────────────────────────────────────────────────────────────
 
 /**
@@ -655,6 +671,13 @@ pushTokens: PushToken[];
 
   @Prop({ default: false })
   onboardingCompleted?: boolean;
+
+  @Prop({
+    type: String,
+    enum: Object.values(OnboardingStatus),
+    default: OnboardingStatus.COMPLETED,
+  })
+  onboardingStatus: OnboardingStatus;
 
   @Prop({ type: Object, default: null })
   agentPreferences?: AgentPreferences;

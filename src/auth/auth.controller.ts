@@ -34,7 +34,9 @@ import { Public } from './guards/roles.guard';
 import { JwtAuthGuard } from './guards/jwt.auth.guard';
 import { User, UserRole } from '../users/schemas/user.schema';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
+import { AllowIncompleteOnboarding } from './guards/onboarding.guard';
 import { ForgotPasswordDto, ResetPasswordDto, ValidateResetTokenDto } from './dto/password-reset.dto';
+import { SelectRoleDto, SetPhoneDto } from './dto/google-onboarding.dto';
 
 // DTOs for API documentation
 class SendPhoneCodeRequestDto {
@@ -349,12 +351,20 @@ export class AuthController {
 
       let redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
+      // Build query params including onboarding status
+      const params = new URLSearchParams({
+        token: authResult.accessToken,
+        refresh: authResult.refreshToken,
+        ...(authResult.isNewUser ? { isNewUser: 'true' } : {}),
+        ...(authResult.onboardingStatus ? { onboardingStatus: authResult.onboardingStatus } : {}),
+      });
+
       // If state contains deep link (e.g., exp://... or horohouse://...), use it
       if (state && (state.startsWith('exp://') || state.startsWith('horohouse://') || state.startsWith('http'))) {
         const separator = state.includes('?') ? '&' : '?';
-        redirectUrl = `${state}${separator}token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+        redirectUrl = `${state}${separator}${params.toString()}`;
       } else {
-        redirectUrl = `${redirectUrl}/auth/callback?token=${authResult.accessToken}&refresh=${authResult.refreshToken}`;
+        redirectUrl = `${redirectUrl}/auth/callback?${params.toString()}`;
       }
 
       // ✅ Fastify redirect signature: redirect(url, statusCode?)
@@ -399,6 +409,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @AllowIncompleteOnboarding()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({ status: 200, description: 'User profile retrieved' })
@@ -410,6 +421,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowIncompleteOnboarding()
   @Get('verify-token')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Verify if current token is valid' })
@@ -444,6 +456,8 @@ export class AuthController {
           phoneVerified: req.user.phoneVerified || false,
           googleId: (req.user as any).googleId,
           hasPassword: !!(req.user as any).hasPassword,
+          onboardingCompleted: (req.user as any).onboardingCompleted ?? false,
+          onboardingStatus: (req.user as any).onboardingStatus || 'completed',
         },
       };
     } catch (error) {
@@ -572,5 +586,73 @@ export class AuthController {
   ) {
     const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
     return this.authService.disconnectGoogle(userId);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Google Onboarding Endpoints
+  // ══════════════════════════════════════════════════════════════════════════
+
+  @Get('onboarding/status')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @AllowIncompleteOnboarding()
+  @ApiOperation({ summary: 'Get Google onboarding status for the current user' })
+  @ApiResponse({ status: 200, description: 'Onboarding status retrieved successfully' })
+  async getOnboardingStatus(@Req() req: FastifyRequest & { user: User | JwtPayload }) {
+    const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+    return this.authService.getGoogleOnboardingStatus(userId);
+  }
+
+  @Post('onboarding/select-role')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @AllowIncompleteOnboarding()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Step 1: Select role during Google onboarding' })
+  @ApiBody({ type: SelectRoleDto })
+  @ApiResponse({ status: 200, description: 'Role selected successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid role or onboarding already completed' })
+  async selectOnboardingRole(
+    @Body() dto: SelectRoleDto,
+    @Req() req: FastifyRequest & { user: User | JwtPayload },
+  ) {
+    const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+    return this.authService.selectOnboardingRole(userId, dto.role);
+  }
+
+  @Post('onboarding/set-phone')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @AllowIncompleteOnboarding()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Step 2: Set phone number during Google onboarding' })
+  @ApiBody({ type: SetPhoneDto })
+  @ApiResponse({ status: 200, description: 'Phone number set successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid phone number or wrong onboarding step' })
+  @ApiResponse({ status: 409, description: 'Phone number already registered' })
+  async setOnboardingPhone(
+    @Body() dto: SetPhoneDto,
+    @Req() req: FastifyRequest & { user: User | JwtPayload },
+  ) {
+    const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+    return this.authService.setOnboardingPhone(userId, dto.phoneNumber);
+  }
+
+  @Post('onboarding/complete')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @AllowIncompleteOnboarding()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Step 3: Complete Google onboarding' })
+  @ApiResponse({ status: 200, description: 'Onboarding completed successfully' })
+  @ApiResponse({ status: 400, description: 'Missing required fields or already completed' })
+  async completeOnboarding(
+    @Req() req: FastifyRequest & { user: User | JwtPayload },
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    const userId = '_id' in req.user ? req.user._id.toString() : req.user.sub;
+    const result = await this.authService.completeGoogleOnboarding(userId);
+    this.setAuthCookies(res, result);
+    return result;
   }
 }

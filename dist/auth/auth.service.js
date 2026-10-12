@@ -245,7 +245,9 @@ let AuthService = class AuthService {
             let user = await this.userModel.findOne({
                 $or: [{ googleId }, { email }]
             });
+            let isNewUser = false;
             if (!user) {
+                isNewUser = true;
                 user = await this.userModel.create({
                     googleId,
                     name,
@@ -255,6 +257,8 @@ let AuthService = class AuthService {
                     role: user_schema_1.UserRole.REGISTERED_USER,
                     emailVerified: true,
                     phoneVerified: false,
+                    onboardingCompleted: false,
+                    onboardingStatus: user_schema_1.OnboardingStatus.NOT_STARTED,
                 });
                 this.logger.log(`New user created via Google OAuth: ${email}`);
                 if (user.email) {
@@ -267,13 +271,25 @@ let AuthService = class AuthService {
                 if (!user.profilePicture && picture)
                     user.profilePicture = picture;
                 user.emailVerified = true;
+                const hasPlaceholderPhone = !user.phoneNumber ||
+                    user.phoneNumber.startsWith('google_') ||
+                    user.phoneNumber.startsWith('temp_');
+                if (hasPlaceholderPhone || user.onboardingCompleted === false || (user.onboardingStatus && user.onboardingStatus !== user_schema_1.OnboardingStatus.COMPLETED)) {
+                    if (!user.onboardingStatus || user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED) {
+                        user.onboardingStatus = user_schema_1.OnboardingStatus.NOT_STARTED;
+                    }
+                    user.onboardingCompleted = false;
+                    isNewUser = true;
+                }
                 await user.save();
-                this.logger.log(`Existing user logged in via Google OAuth: ${email}`);
+                this.logger.log(`Existing user logged in via Google OAuth: ${email}, onboardingStatus: ${user.onboardingStatus}`);
             }
             const tokens = await this.generateTokens(user, req);
             return {
                 ...tokens,
                 user: user.toJSON(),
+                isNewUser,
+                onboardingStatus: user.onboardingStatus,
             };
         }
         catch (error) {
@@ -823,6 +839,106 @@ let AuthService = class AuthService {
             this.logger.error('Google disconnect failed:', error);
             throw error;
         }
+    }
+    static ONBOARDING_SELF_ASSIGNABLE_ROLES = [
+        user_schema_1.UserRole.REGISTERED_USER,
+        user_schema_1.UserRole.HOST,
+        user_schema_1.UserRole.LANDLORD,
+        user_schema_1.UserRole.AGENT,
+    ];
+    async getGoogleOnboardingStatus(userId) {
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        const hasRealPhone = user.phoneNumber && !user.phoneNumber.startsWith('google_') && !user.phoneNumber.startsWith('temp_');
+        return {
+            onboardingStatus: user.onboardingStatus,
+            role: user.role,
+            phoneNumber: hasRealPhone ? user.phoneNumber : null,
+            name: user.name,
+            email: user.email || null,
+            profilePicture: user.profilePicture || null,
+        };
+    }
+    async selectOnboardingRole(userId, role) {
+        if (!AuthService_1.ONBOARDING_SELF_ASSIGNABLE_ROLES.includes(role)) {
+            throw new common_1.BadRequestException(`Invalid role. Allowed roles: ${AuthService_1.ONBOARDING_SELF_ASSIGNABLE_ROLES.join(', ')}`);
+        }
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        if (user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED) {
+            throw new common_1.BadRequestException('Onboarding is already completed. Role cannot be changed here.');
+        }
+        user.role = role;
+        user.onboardingStatus = user_schema_1.OnboardingStatus.ROLE_SELECTED;
+        await user.save();
+        this.logger.log(`Onboarding role selected for user ${userId}: ${role}`);
+        return {
+            onboardingStatus: user.onboardingStatus,
+            role: user.role,
+        };
+    }
+    async setOnboardingPhone(userId, phoneNumber) {
+        if (!this.smsService.isValidPhoneNumber(phoneNumber)) {
+            throw new common_1.BadRequestException('Invalid phone number format. Use E.164 format (e.g. +237612345678).');
+        }
+        const formattedPhone = this.smsService.formatPhoneNumber(phoneNumber);
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        if (user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED) {
+            throw new common_1.BadRequestException('Onboarding is already completed.');
+        }
+        if (user.onboardingStatus === user_schema_1.OnboardingStatus.NOT_STARTED) {
+            throw new common_1.BadRequestException('Please select a role before providing a phone number.');
+        }
+        const existingUser = await this.userModel.findOne({
+            _id: { $ne: user._id },
+            phoneNumber: formattedPhone,
+        });
+        if (existingUser) {
+            throw new common_1.ConflictException('This phone number is already registered to another account.');
+        }
+        user.phoneNumber = formattedPhone;
+        user.phoneVerified = false;
+        user.onboardingStatus = user_schema_1.OnboardingStatus.PHONE_PROVIDED;
+        await user.save();
+        this.logger.log(`Onboarding phone set for user ${userId}: ${formattedPhone}`);
+        return {
+            onboardingStatus: user.onboardingStatus,
+            phoneNumber: formattedPhone,
+        };
+    }
+    async completeGoogleOnboarding(userId) {
+        const user = await this.userModel.findById(userId);
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        if (user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED) {
+            throw new common_1.BadRequestException('Onboarding is already completed.');
+        }
+        const hasValidRole = AuthService_1.ONBOARDING_SELF_ASSIGNABLE_ROLES.includes(user.role);
+        const hasRealPhone = user.phoneNumber && !user.phoneNumber.startsWith('google_') && !user.phoneNumber.startsWith('temp_');
+        if (!hasValidRole) {
+            throw new common_1.BadRequestException('Please select a valid role before completing onboarding.');
+        }
+        if (!hasRealPhone) {
+            throw new common_1.BadRequestException('Please provide a valid phone number before completing onboarding.');
+        }
+        user.onboardingStatus = user_schema_1.OnboardingStatus.COMPLETED;
+        user.onboardingCompleted = true;
+        await user.save();
+        this.logger.log(`Google onboarding completed for user ${userId}`);
+        const tokens = await this.generateTokens(user);
+        return {
+            ...tokens,
+            user: user.toJSON(),
+            onboardingStatus: user_schema_1.OnboardingStatus.COMPLETED,
+        };
     }
 };
 exports.AuthService = AuthService;

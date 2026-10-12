@@ -65,6 +65,7 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
                 preferences: user.preferences,
                 agentPreferences: user.agentPreferences,
                 onboardingCompleted: user.onboardingCompleted,
+                onboardingStatus: user.onboardingStatus,
                 licenseNumber: user.licenseNumber,
                 agency: user.agency,
                 googleId: user.googleId,

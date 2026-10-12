@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { AuthService, AuthTokens, RegisterWithPhoneDto, RegisterWithEmailDto, LoginWithPhoneDto, LoginWithEmailDto, SendPhoneCodeDto, VerifyPhoneDto, JwtPayload } from './auth.service';
 import { User, UserRole } from '../users/schemas/user.schema';
 import { ForgotPasswordDto, ResetPasswordDto, ValidateResetTokenDto } from './dto/password-reset.dto';
+import { SelectRoleDto, SetPhoneDto } from './dto/google-onboarding.dto';
 declare class RefreshTokenDto {
     refreshToken: string;
 }
@@ -63,6 +64,8 @@ export declare class AuthController {
             phoneVerified: boolean;
             googleId: any;
             hasPassword: boolean;
+            onboardingCompleted: any;
+            onboardingStatus: any;
         };
     }>;
     changePassword(body: {
@@ -131,5 +134,30 @@ export declare class AuthController {
     }): Promise<{
         message: string;
     }>;
+    getOnboardingStatus(req: FastifyRequest & {
+        user: User | JwtPayload;
+    }): Promise<{
+        onboardingStatus: import("../users/schemas/user.schema").OnboardingStatus;
+        role: UserRole;
+        phoneNumber: string | null;
+        name: string;
+        email: string | null;
+        profilePicture: string | null;
+    }>;
+    selectOnboardingRole(dto: SelectRoleDto, req: FastifyRequest & {
+        user: User | JwtPayload;
+    }): Promise<{
+        onboardingStatus: import("../users/schemas/user.schema").OnboardingStatus;
+        role: UserRole;
+    }>;
+    setOnboardingPhone(dto: SetPhoneDto, req: FastifyRequest & {
+        user: User | JwtPayload;
+    }): Promise<{
+        onboardingStatus: import("../users/schemas/user.schema").OnboardingStatus;
+        phoneNumber: string;
+    }>;
+    completeOnboarding(req: FastifyRequest & {
+        user: User | JwtPayload;
+    }, res: FastifyReply): Promise<AuthTokens>;
 }
 export {};
