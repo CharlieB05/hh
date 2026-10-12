@@ -55,7 +55,8 @@ export interface AvailabilityResult {
     guestCount?: number;
     totalPrice?: number;
     guestName?: string;
-    guest?: { name?: string };
+    guestAvatar?: string | null;
+    guest?: { name?: string; profilePicture?: string };
   }>;
 }
 
@@ -652,7 +653,7 @@ export class BookingsService {
         checkOut: { $gt: from },
       })
       .select('checkIn checkOut status guestCount totalPrice guestId')
-      .populate('guestId', 'name')
+      .populate('guestId', 'name profilePicture')
       .lean()
       .exec();
 
@@ -664,7 +665,8 @@ export class BookingsService {
       guestCount: b.guestCount,
       totalPrice: b.totalPrice,
       guestName: b.guestId?.name ?? 'Guest',
-      guest: b.guestId ? { name: b.guestId.name } : undefined,
+      guestAvatar: b.guestId?.profilePicture ?? null,
+      guest: b.guestId ? { name: b.guestId.name, profilePicture: b.guestId.profilePicture } : undefined,
     }));
 
     const available = hostBlockedRanges.length === 0 && bookedRanges.length === 0;

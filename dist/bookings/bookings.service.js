@@ -422,7 +422,7 @@ let BookingsService = BookingsService_1 = class BookingsService {
             checkOut: { $gt: from },
         })
             .select('checkIn checkOut status guestCount totalPrice guestId')
-            .populate('guestId', 'name')
+            .populate('guestId', 'name profilePicture')
             .lean()
             .exec();
         const bookedRanges = bookings.map((b) => ({
@@ -433,7 +433,8 @@ let BookingsService = BookingsService_1 = class BookingsService {
             guestCount: b.guestCount,
             totalPrice: b.totalPrice,
             guestName: b.guestId?.name ?? 'Guest',
-            guest: b.guestId ? { name: b.guestId.name } : undefined,
+            guestAvatar: b.guestId?.profilePicture ?? null,
+            guest: b.guestId ? { name: b.guestId.name, profilePicture: b.guestId.profilePicture } : undefined,
         }));
         const available = hostBlockedRanges.length === 0 && bookedRanges.length === 0;
         return { available, unavailableDates: hostBlockedRanges, bookedRanges };

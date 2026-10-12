@@ -26,8 +26,10 @@ export interface AvailabilityResult {
         guestCount?: number;
         totalPrice?: number;
         guestName?: string;
+        guestAvatar?: string | null;
         guest?: {
             name?: string;
+            profilePicture?: string;
         };
     }>;
 }
