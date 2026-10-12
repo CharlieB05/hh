@@ -678,6 +678,8 @@ let AuthService = class AuthService {
             email: user.email,
             role: user.role,
             sessionId,
+            onboardingStatus: user.onboardingStatus,
+            onboardingCompleted: user.onboardingCompleted ?? (user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED),
         };
         const accessTokenOptions = {
             secret: this.configService.get('JWT_SECRET'),

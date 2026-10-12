@@ -1022,6 +1022,8 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
       email: user.email,
       role: user.role,
       sessionId,
+      onboardingStatus: user.onboardingStatus,
+      onboardingCompleted: user.onboardingCompleted ?? (user.onboardingStatus === OnboardingStatus.COMPLETED),
     };
 
     const accessTokenOptions: JwtSignOptions = {
