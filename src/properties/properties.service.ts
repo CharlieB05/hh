@@ -968,8 +968,9 @@ export class PropertiesService implements OnModuleInit {
       const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', includeInactive = true } = options;
       const skip = (page - 1) * limit;
       const userObjectId = new Types.ObjectId(userId);
-
-      const query: any = { ownerId: userObjectId };
+      const query: any = {
+        $or: [{ ownerId: userObjectId }, { agentId: userObjectId }],
+      };
 
       if (!includeInactive) {
         query.isActive = true;

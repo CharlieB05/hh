@@ -646,8 +646,8 @@ export class BookingsService {
     const bookings = await this.bookingModel
       .find({
         propertyId: new Types.ObjectId(propertyId),
-        roomId: { $exists: false },  // only whole-property bookings
-        status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING] },
+        $or: [{ roomId: { $exists: false } }, { roomId: null }],
+        status: { $in: [BookingStatus.CONFIRMED, BookingStatus.PENDING, BookingStatus.COMPLETED] },
         checkIn: { $lt: to },
         checkOut: { $gt: from },
       })

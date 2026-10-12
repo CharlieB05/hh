@@ -416,8 +416,8 @@ let BookingsService = BookingsService_1 = class BookingsService {
         const bookings = await this.bookingModel
             .find({
             propertyId: new mongoose_2.Types.ObjectId(propertyId),
-            roomId: { $exists: false },
-            status: { $in: [booking_schema_1.BookingStatus.CONFIRMED, booking_schema_1.BookingStatus.PENDING] },
+            $or: [{ roomId: { $exists: false } }, { roomId: null }],
+            status: { $in: [booking_schema_1.BookingStatus.CONFIRMED, booking_schema_1.BookingStatus.PENDING, booking_schema_1.BookingStatus.COMPLETED] },
             checkIn: { $lt: to },
             checkOut: { $gt: from },
         })

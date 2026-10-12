@@ -678,7 +678,9 @@ let PropertiesService = PropertiesService_1 = class PropertiesService {
             const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc', includeInactive = true } = options;
             const skip = (page - 1) * limit;
             const userObjectId = new mongoose_2.Types.ObjectId(userId);
-            const query = { ownerId: userObjectId };
+            const query = {
+                $or: [{ ownerId: userObjectId }, { agentId: userObjectId }],
+            };
             if (!includeInactive) {
                 query.isActive = true;
                 query.availability = property_schema_1.PropertyStatus.ACTIVE;
