@@ -1303,6 +1303,10 @@ export class PropertiesService implements OnModuleInit {
     if (dto.windowMonths !== undefined) update.windowMonths = dto.windowMonths;
 
     await this.propertyModel.findByIdAndUpdate(propertyId, { $set: update }, { new: true }).exec();
+    this.cacheInvalidate(`property_${propertyId}`);
+    this.cacheInvalidate(`similar_${propertyId}`);
+    this.cacheInvalidate('featured_');
+    this.cacheInvalidate('recent_');
     return this.getCalendarSettings(propertyId, user);
   }
 
