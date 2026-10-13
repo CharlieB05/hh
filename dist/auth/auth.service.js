@@ -108,6 +108,8 @@ let AuthService = class AuthService {
                 role: this.resolveSelfAssignableRole(role),
                 phoneVerified: false,
                 emailVerified: false,
+                onboardingCompleted: true,
+                onboardingStatus: user_schema_1.OnboardingStatus.COMPLETED,
             });
             this.logger.log(`New user registered with phone: ${formattedPhone}`);
             if (user.email) {
@@ -153,6 +155,8 @@ let AuthService = class AuthService {
                 role: this.resolveSelfAssignableRole(role),
                 phoneVerified: false,
                 emailVerified: false,
+                onboardingCompleted: true,
+                onboardingStatus: user_schema_1.OnboardingStatus.COMPLETED,
             });
             this.logger.log(`New user registered with email: ${normalizedEmail}`);
             const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -271,19 +275,27 @@ let AuthService = class AuthService {
                 if (!user.profilePicture && picture)
                     user.profilePicture = picture;
                 user.emailVerified = true;
-                const alreadyCompleted = user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED ||
+                const hasPlaceholderPhone = !user.phoneNumber ||
+                    user.phoneNumber.startsWith('google_') ||
+                    user.phoneNumber.startsWith('temp_');
+                const explicitlyCompleted = user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED ||
                     user.onboardingCompleted === true;
-                if (!alreadyCompleted) {
-                    const hasPlaceholderPhone = !user.phoneNumber ||
-                        user.phoneNumber.startsWith('google_') ||
-                        user.phoneNumber.startsWith('temp_');
-                    if (hasPlaceholderPhone || user.onboardingStatus !== user_schema_1.OnboardingStatus.COMPLETED) {
-                        if (!user.onboardingStatus) {
-                            user.onboardingStatus = user_schema_1.OnboardingStatus.NOT_STARTED;
-                        }
-                        user.onboardingCompleted = false;
-                        isNewUser = true;
+                const implicitlyCompleted = !hasPlaceholderPhone &&
+                    user.role !== user_schema_1.UserRole.REGISTERED_USER &&
+                    AuthService_1.ONBOARDING_SELF_ASSIGNABLE_ROLES.includes(user.role);
+                const alreadyCompleted = explicitlyCompleted || implicitlyCompleted;
+                if (alreadyCompleted) {
+                    if (user.onboardingStatus !== user_schema_1.OnboardingStatus.COMPLETED) {
+                        user.onboardingStatus = user_schema_1.OnboardingStatus.COMPLETED;
+                        user.onboardingCompleted = true;
                     }
+                }
+                else {
+                    if (!user.onboardingStatus) {
+                        user.onboardingStatus = user_schema_1.OnboardingStatus.NOT_STARTED;
+                    }
+                    user.onboardingCompleted = false;
+                    isNewUser = true;
                 }
                 await user.save();
                 this.logger.log(`Existing user logged in via Google OAuth: ${email}, onboardingStatus: ${user.onboardingStatus}`);

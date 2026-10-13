@@ -199,6 +199,8 @@ async registerWithPhone(dto: RegisterWithPhoneDto, req?: any): Promise<AuthToken
       role: this.resolveSelfAssignableRole(role),
       phoneVerified: false,
       emailVerified: false,
+      onboardingCompleted: true,
+      onboardingStatus: OnboardingStatus.COMPLETED,
     });
 
       this.logger.log(`New user registered with phone: ${formattedPhone}`);
@@ -261,6 +263,8 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
       role: this.resolveSelfAssignableRole(role),
       phoneVerified: false,
       emailVerified: false,
+      onboardingCompleted: true,
+      onboardingStatus: OnboardingStatus.COMPLETED,
     });
 
       this.logger.log(`New user registered with email: ${normalizedEmail}`);
@@ -429,23 +433,37 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
         // Check if existing user has incomplete onboarding.
         // IMPORTANT: only flag onboarding-required if the user has NOT already completed it.
         // Never downgrade a COMPLETED onboarding status.
-        const alreadyCompleted =
+        const hasPlaceholderPhone =
+          !user.phoneNumber ||
+          user.phoneNumber.startsWith('google_') ||
+          user.phoneNumber.startsWith('temp_');
+
+        // Explicit completion flag
+        const explicitlyCompleted =
           user.onboardingStatus === OnboardingStatus.COMPLETED ||
           user.onboardingCompleted === true;
 
-        if (!alreadyCompleted) {
-          const hasPlaceholderPhone =
-            !user.phoneNumber ||
-            user.phoneNumber.startsWith('google_') ||
-            user.phoneNumber.startsWith('temp_');
+        // Implicit completion: users registered via email/phone before
+        // onboarding fields existed — they have a real phone + valid role
+        const implicitlyCompleted =
+          !hasPlaceholderPhone &&
+          user.role !== UserRole.REGISTERED_USER &&
+          AuthService.ONBOARDING_SELF_ASSIGNABLE_ROLES.includes(user.role);
 
-          if (hasPlaceholderPhone || user.onboardingStatus !== OnboardingStatus.COMPLETED) {
-            if (!user.onboardingStatus) {
-              user.onboardingStatus = OnboardingStatus.NOT_STARTED;
-            }
-            user.onboardingCompleted = false;
-            isNewUser = true; // Signal to clients that onboarding is required
+        const alreadyCompleted = explicitlyCompleted || implicitlyCompleted;
+
+        if (alreadyCompleted) {
+          // Back-fill missing onboarding fields for legacy users
+          if (user.onboardingStatus !== OnboardingStatus.COMPLETED) {
+            user.onboardingStatus = OnboardingStatus.COMPLETED;
+            user.onboardingCompleted = true;
           }
+        } else {
+          if (!user.onboardingStatus) {
+            user.onboardingStatus = OnboardingStatus.NOT_STARTED;
+          }
+          user.onboardingCompleted = false;
+          isNewUser = true; // Signal to clients that onboarding is required
         }
 
         await user.save();

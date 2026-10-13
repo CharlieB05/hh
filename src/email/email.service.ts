@@ -20,6 +20,7 @@ interface BaseTemplateParams {
 
 interface PasswordResetTemplateParams extends BaseTemplateParams {
   resetUrl: string;
+  resetToken: string;
 }
 
 interface SavedSearchTemplateParams extends BaseTemplateParams {
@@ -109,8 +110,8 @@ export class EmailService {
     await this.safeSendMail({
       to: recipientEmail,
       subject: `Reset Your ${this.brandName} Password`,
-      text: `Hi ${displayName},\n\nWe received a request to reset your password.\n\nReset link: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n— The ${this.brandName} Team`,
-      html: this.buildPasswordResetTemplate({ ...this.baseParams(), recipientName: displayName, resetUrl }),
+      text: `Hi ${displayName},\n\nWe received a request to reset your password.\n\nReset link: ${resetUrl}\n\nReset token: ${resetToken}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n— The ${this.brandName} Team`,
+      html: this.buildPasswordResetTemplate({ ...this.baseParams(), recipientName: displayName, resetUrl, resetToken }),
     });
   }
 
@@ -395,6 +396,10 @@ private async safeSendMail(options: SendMailOptions): Promise<void> {
       <p style="line-height:1.6;margin-top:16px;font-size:14px;color:#475569;">This link expires in <strong>1 hour</strong>.</p>
       <p style="line-height:1.6;font-size:14px;color:#475569;">If the button doesn't work, copy and paste this link:</p>
       <p style="font-size:14px;color:#2563eb;word-break:break-all;">${p.resetUrl}</p>
+      <div style="margin-top:20px;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+        <p style="margin:0 0 4px 0;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Mobile App Reset Token</p>
+        <p style="margin:0;font-family:monospace;font-size:13px;color:#0f172a;word-break:break-all;">${p.resetToken}</p>
+      </div>
       <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e2e8f0;">
         <p style="font-size:14px;color:#475569;margin:0;"><strong>Didn't request this?</strong> You can safely ignore this email.</p>
       </div>
