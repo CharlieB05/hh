@@ -61,7 +61,12 @@ let NotificationsService = NotificationsService_1 = class NotificationsService {
             await this.pushNotificationsService.sendToUser(String(createNotificationDto.userId), {
                 title: createNotificationDto.title,
                 body: createNotificationDto.message,
-                data: { route: createNotificationDto.link, notificationId: saved._id.toString() },
+                data: {
+                    route: createNotificationDto.link,
+                    notificationId: saved._id.toString(),
+                    type: createNotificationDto.type,
+                    metadata: createNotificationDto.metadata,
+                },
             });
         }
         catch (pushErr) {

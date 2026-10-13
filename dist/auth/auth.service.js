@@ -271,15 +271,19 @@ let AuthService = class AuthService {
                 if (!user.profilePicture && picture)
                     user.profilePicture = picture;
                 user.emailVerified = true;
-                const hasPlaceholderPhone = !user.phoneNumber ||
-                    user.phoneNumber.startsWith('google_') ||
-                    user.phoneNumber.startsWith('temp_');
-                if (hasPlaceholderPhone || user.onboardingCompleted === false || (user.onboardingStatus && user.onboardingStatus !== user_schema_1.OnboardingStatus.COMPLETED)) {
-                    if (!user.onboardingStatus || user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED) {
-                        user.onboardingStatus = user_schema_1.OnboardingStatus.NOT_STARTED;
+                const alreadyCompleted = user.onboardingStatus === user_schema_1.OnboardingStatus.COMPLETED ||
+                    user.onboardingCompleted === true;
+                if (!alreadyCompleted) {
+                    const hasPlaceholderPhone = !user.phoneNumber ||
+                        user.phoneNumber.startsWith('google_') ||
+                        user.phoneNumber.startsWith('temp_');
+                    if (hasPlaceholderPhone || user.onboardingStatus !== user_schema_1.OnboardingStatus.COMPLETED) {
+                        if (!user.onboardingStatus) {
+                            user.onboardingStatus = user_schema_1.OnboardingStatus.NOT_STARTED;
+                        }
+                        user.onboardingCompleted = false;
+                        isNewUser = true;
                     }
-                    user.onboardingCompleted = false;
-                    isNewUser = true;
                 }
                 await user.save();
                 this.logger.log(`Existing user logged in via Google OAuth: ${email}, onboardingStatus: ${user.onboardingStatus}`);

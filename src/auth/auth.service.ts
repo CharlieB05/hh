@@ -426,18 +426,26 @@ async registerWithEmail(dto: RegisterWithEmailDto, req?: any): Promise<AuthToken
         if (!user.profilePicture && picture) user.profilePicture = picture;
         user.emailVerified = true;
 
-        // Check if existing user has incomplete onboarding (e.g. placeholder phone or not marked completed)
-        const hasPlaceholderPhone =
-          !user.phoneNumber ||
-          user.phoneNumber.startsWith('google_') ||
-          user.phoneNumber.startsWith('temp_');
+        // Check if existing user has incomplete onboarding.
+        // IMPORTANT: only flag onboarding-required if the user has NOT already completed it.
+        // Never downgrade a COMPLETED onboarding status.
+        const alreadyCompleted =
+          user.onboardingStatus === OnboardingStatus.COMPLETED ||
+          user.onboardingCompleted === true;
 
-        if (hasPlaceholderPhone || user.onboardingCompleted === false || (user.onboardingStatus && user.onboardingStatus !== OnboardingStatus.COMPLETED)) {
-          if (!user.onboardingStatus || user.onboardingStatus === OnboardingStatus.COMPLETED) {
-            user.onboardingStatus = OnboardingStatus.NOT_STARTED;
+        if (!alreadyCompleted) {
+          const hasPlaceholderPhone =
+            !user.phoneNumber ||
+            user.phoneNumber.startsWith('google_') ||
+            user.phoneNumber.startsWith('temp_');
+
+          if (hasPlaceholderPhone || user.onboardingStatus !== OnboardingStatus.COMPLETED) {
+            if (!user.onboardingStatus) {
+              user.onboardingStatus = OnboardingStatus.NOT_STARTED;
+            }
+            user.onboardingCompleted = false;
+            isNewUser = true; // Signal to clients that onboarding is required
           }
-          user.onboardingCompleted = false;
-          isNewUser = true; // Signal to clients that onboarding is required
         }
 
         await user.save();
